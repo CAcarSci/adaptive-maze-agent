@@ -12,6 +12,8 @@ Implemented.
 
 The current implementation contains a working baseline maze bot based on a simple DFS-like exploration strategy.
 
+DFS (Depth-First Search) is a graph traversal algorithm that explores as far as possible along each branch before backtracking. It uses a stack to keep track of the path, visiting unvisited neighbors and returning to previous nodes when no unvisited neighbors remain.
+
 The baseline bot can:
 
 - register a player through the Maze API
@@ -29,6 +31,7 @@ The baseline bot was tested on:
 
 - `Test`
 - `Easy deal`
+- `Hello Maze`
 
 For `Easy deal`, the bot collected the full potential reward:
 
@@ -82,6 +85,51 @@ The analysis currently includes:
 
 This step is exploratory. The goal is to understand the collected data before implementing a smarter navigation strategy.
 
+### Step 3 — Smart Bot
+
+Implemented.
+
+The project now includes a smarter bot implementation based on a policy abstraction.
+
+Instead of hardcoding the smart logic directly inside the bot orchestration, navigation decisions are delegated to a separate policy layer. This keeps the solution modular and makes it possible to compare different navigation strategies fairly.
+
+Implemented policies:
+
+- `BaselineDfsPolicy`
+- `RewardAwarePolicy`
+
+The baseline policy preserves the original deterministic DFS-like behavior.
+
+The reward-aware policy is the first smart strategy. It scores candidate actions using simple, explainable features:
+
+- whether the destination tile is unvisited
+- immediate reward on the destination tile
+- whether the destination allows score collection
+- whether the destination allows exit
+- destination revisit count
+- whether the destination is the start tile
+
+The smart bot is implemented as `SmartMazeBot`. It reuses the same robust maze orchestration as the baseline bot, but injects the `RewardAwarePolicy`.
+
+This makes the smart bot:
+
+- explainable
+- easy to test
+- easy to compare against the baseline
+- extensible for future ML-based policy learning
+
+The selected bot can be configured through `.env`:
+
+```env
+BOT_TYPE=baseline
+```
+
+or:
+
+```env
+BOT_TYPE=smart
+```
+
 ## Why a Baseline First?
 
 A baseline is important because it gives us a fair point of comparison.
@@ -108,9 +156,23 @@ This allows later analysis of questions such as:
 - Does the baseline bot miss better alternatives?
 - Which features could be useful for a smarter policy?
 
+## Why a Policy-Based Smart Bot?
+
+A policy-based design separates the question "how do we choose the next move?" from the rest of the maze-solving flow.
+
+This is useful because the bot orchestration remains stable while different decision strategies can be tested independently.
+
+For example:
+
+- `BaselineDfsPolicy` can be used as the reference strategy
+- `RewardAwarePolicy` can be used as the first smarter strategy
+- a future trained model policy could be added without rewriting the bot
+
+This design supports the AI engineering workflow of comparing strategies, measuring behavior and improving the decision layer incrementally.
+
 ## Architecture
 
-The current implementation follows a lightweight layered architecture. The main idea is to separate orchestration, domain logic, infrastructure concerns and analysis capabilities so the bot can evolve from a simple baseline into a more data-driven AI/ML solution.
+The current implementation follows a lightweight layered architecture. The main idea is to separate orchestration, domain logic, decision policies, infrastructure concerns and analysis capabilities so the bot can evolve from a simple baseline into a more data-driven AI/ML solution.
 
 ```mermaid
 flowchart TD
@@ -118,53 +180,69 @@ flowchart TD
     subgraph APP[Application Layer]
         A[main.py]
         B[BaselineMazeBot]
+        C[SmartMazeBot]
     end
 
-    %% Domain Layer
-    subgraph DOMAIN[Domain Layer]
-        C[models.py<br/>MazeState / MoveAction]
-        D[Navigation Logic<br/>DFS-style baseline strategy]
+    %% Domain and Policy Layer
+    subgraph DOMAIN[Domain and Policy Layer]
+        D[models.py<br/>MazeState / MoveAction]
+        E[NavigationPolicy]
+        F[BaselineDfsPolicy]
+        G[RewardAwarePolicy]
     end
 
     %% Infrastructure Layer
     subgraph INFRA[Infrastructure Layer]
-        E[config.py]
-        F[MazeClient]
-        G[TelemetryLogger]
-        H[experiments/action_logs.csv]
-        I[HTI Maze API]
+        H[config.py]
+        I[MazeClient]
+        J[TelemetryLogger]
+        K[experiments/action_logs.csv]
+        L[HTI Maze API]
     end
 
     %% Analysis Layer
     subgraph ANALYSIS[Analysis Layer]
-        J[analyze_telemetry.py]
-        K[reports/telemetry_analysis.md]
+        M[analyze_telemetry.py]
+        N[reports/telemetry_analysis.md]
     end
 
     %% Quality Layer
     subgraph TESTS[Quality Layer]
-        L[tests/]
+        O[tests/]
     end
 
-    A --> E
-    A --> F
+    A --> H
+    A --> I
     A --> B
-    A --> G
+    A --> C
+    A --> J
+
+    B --> E
+    C --> E
+
+    E --> F
+    E --> G
 
     B --> D
-    B --> C
-    B --> F
-    B --> G
+    C --> D
 
-    F --> I
-    G --> H
+    B --> I
+    C --> I
 
-    J --> H
+    B --> J
+    C --> J
+
+    I --> L
     J --> K
 
-    L --> E
-    L --> C
-    L --> G
+    M --> K
+    M --> N
+
+    O --> H
+    O --> D
+    O --> J
+    O --> F
+    O --> G
 ```
 
 ### Layer Overview
@@ -173,25 +251,24 @@ flowchart TD
 
 The application layer is responsible for orchestrating the run.
 
-- `main.py` initializes configuration, the API client, the bot and telemetry logging.
+- `main.py` initializes configuration, the API client, the selected bot and telemetry logging.
 - `BaselineMazeBot` controls the maze-solving flow and coordinates exploration, backtracking, score collection and exit handling.
+- `SmartMazeBot` reuses the same orchestration but injects a smarter reward-aware policy.
 
 This layer should stay thin and mainly focus on orchestration.
 
-#### Domain Layer
+#### Domain and Policy Layer
 
-The domain layer contains the maze-related concepts and navigation behavior.
+The domain and policy layer contains the maze-related concepts and navigation decision logic.
 
 - `models.py` defines the domain models:
   - `MazeState`
   - `MoveAction`
-- the baseline navigation logic currently follows a deterministic DFS-like strategy:
-  1. prefer unvisited moves
-  2. backtrack when necessary
-  3. remember important locations such as exits and collection points
-  4. collect score before leaving the maze
+- `NavigationPolicy` defines the contract for decision policies.
+- `BaselineDfsPolicy` preserves the deterministic baseline behavior.
+- `RewardAwarePolicy` implements the first smarter navigation strategy.
 
-This layer is the most likely place for future policy abstraction and smarter navigation strategies.
+The reward-aware policy uses an explainable scoring function instead of a black-box model. This is intentional for the first smart version because it makes the behavior easier to inspect, test and discuss.
 
 #### Infrastructure Layer
 
@@ -213,14 +290,14 @@ This separation keeps HTTP details and file I/O out of the navigation logic.
 
 #### Analysis Layer
 
-The analysis layer is responsible for understanding the behavior of the baseline bot.
+The analysis layer is responsible for understanding the behavior of the bot.
 
 - `analyze_telemetry.py` reads the telemetry dataset from:
   - `experiments/action_logs.csv`
 - it generates an exploratory Markdown report:
   - `reports/telemetry_analysis.md`
 
-This layer is used to identify useful signals before implementing a smarter policy.
+This layer is used to identify useful signals and support future evaluation between the baseline and smart bot.
 
 #### Quality Layer
 
@@ -232,8 +309,10 @@ Current test coverage includes:
 - API response model parsing
 - direction ordering and opposite-direction mapping
 - telemetry logging behavior
+- baseline policy decision behavior
+- reward-aware policy decision behavior
 
-This helps keep the baseline implementation stable while the project evolves.
+This helps keep the implementation stable while the project evolves.
 
 ### Architectural Intent
 
@@ -245,7 +324,7 @@ This architecture is intentionally designed to support an incremental AI enginee
 4. introduce a smarter decision policy
 5. evaluate improvements against the baseline
 
-By separating application flow, domain logic, infrastructure and analysis, the project remains understandable, testable and easy to extend.
+By separating application flow, domain logic, policy decisions, infrastructure and analysis, the project remains understandable, testable and easy to extend.
 
 ## Setup
 
@@ -275,6 +354,8 @@ MAZE_BASE_URL=https://maze.kluster.htiprojects.nl
 MAZE_API_TOKEN=<your-api-token>
 PLAYER_NAME=<your-player-name>
 DEFAULT_MAZE_NAME=Easy deal
+BOT_TYPE=baseline
+RESET_PLAYER_ON_START=false
 ```
 
 The code automatically sends the token using the required authorization header format:
@@ -285,7 +366,7 @@ Authorization: HTI Thanks You <token>
 
 ## Running the Bot
 
-Run the baseline bot:
+Run the selected bot:
 
 ```bash
 python -m src.main
@@ -297,7 +378,51 @@ You can change the selected maze in `.env`:
 DEFAULT_MAZE_NAME=Hello Maze
 ```
 
-During development, the player can remain inside a maze after an interrupted run. The current runner resets the player state when needed to make local development easier.
+You can select the bot type in `.env`:
+
+```env
+BOT_TYPE=baseline
+```
+
+or:
+
+```env
+BOT_TYPE=smart
+```
+
+During development, the player can remain inside a maze after an interrupted run. The runner can reset the player state when needed to make local development and comparison easier:
+
+```env
+RESET_PLAYER_ON_START=true
+```
+
+## Running the Smart Bot
+
+To run the smart bot locally, update `.env`:
+
+```env
+DEFAULT_MAZE_NAME=Example Maze
+BOT_TYPE=smart
+RESET_PLAYER_ON_START=true
+```
+
+Then run:
+
+```bash
+python -m src.main
+```
+
+Generate the updated telemetry analysis:
+
+```bash
+python -m src.analysis.analyze_telemetry
+```
+
+The telemetry should include rows where:
+
+```text
+bot_name: reward_aware
+```
 
 ## Generating Telemetry
 
@@ -317,6 +442,12 @@ Inspect the first rows:
 
 ```bash
 head -n 5 experiments/action_logs.csv
+```
+
+Inspect the latest rows:
+
+```bash
+tail -n 10 experiments/action_logs.csv
 ```
 
 ## Running the Analysis
@@ -345,6 +476,8 @@ The tests cover:
 - stable baseline direction ordering
 - opposite direction mapping
 - telemetry CSV logging
+- baseline DFS policy behavior
+- reward-aware policy behavior
 
 Run tests with:
 
@@ -354,37 +487,25 @@ pytest -v
 
 ## Current Limitations
 
-This project is currently at Step 2.
+This project is currently at Step 3.
 
 The current implementation does not yet:
 
-- train a smarter policy
-- compare baseline and smart bot metrics
+- formally compare baseline and smart bot metrics
 - use MLflow for experiment tracking
 - reconstruct a complete graph-level view of the maze
 - precisely classify destination tiles as dead ends, corridors or junctions
+- train a model-based policy from telemetry data
+
+The current smart bot uses an explainable reward-aware scoring policy. This is a deliberate first smart version because it is easier to reason about and evaluate before introducing a trained model.
 
 The current branching-factor analysis is an approximation. It uses the number of available actions from the current tile, while the immediate reward belongs to the candidate destination tile. A more precise tile-type analysis will require graph reconstruction in a later iteration.
 
 ## Next Steps
 
-### Step 3 — Smarter Bot
-
-The next step is to implement a smarter navigation strategy based on the telemetry analysis.
-
-The first smart version should remain simple and explainable. A good first approach is a reward-aware policy that prioritizes:
-
-- unvisited tiles
-- higher immediate rewards
-- collection points when score is in hand
-- lower revisit counts
-- exit tiles when the bot is ready to finish
-
-This keeps the strategy interpretable while still making the bot more data-driven than the baseline DFS strategy.
-
 ### Step 4 — Evaluation
 
-The final step will compare the baseline bot and the smarter bot in a data-driven way.
+The next step is to compare the baseline bot and the smart bot in a data-driven way.
 
 Potential evaluation metrics:
 
@@ -396,13 +517,16 @@ Potential evaluation metrics:
 - whether the exit was found
 - number of API calls
 
+The evaluation should run both strategies on the same maze set and compare their behavior using consistent metrics.
+
 ### Lightweight MLOps
 
-After the smarter bot is implemented, MLflow can be added as a lightweight MLOps layer.
+After the evaluation workflow is implemented, MLflow can be added as a lightweight MLOps layer.
 
 Potential MLflow tracking:
 
 - bot type
+- policy name
 - maze name
 - run parameters
 - final score

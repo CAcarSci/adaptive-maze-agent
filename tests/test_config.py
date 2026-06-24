@@ -7,6 +7,8 @@ def test_authorization_header_adds_prefix_when_only_token_is_provided():
         api_token="abc123",
         player_name="Test Player",
         default_maze_name="Test",
+        bot_type="baseline",
+        reset_player_on_start=False,
     )
 
     assert settings.authorization_header == f"{AUTH_PREFIX} abc123"
@@ -20,6 +22,8 @@ def test_authorization_header_keeps_full_header_when_already_provided():
         api_token=full_header,
         player_name="Test Player",
         default_maze_name="Test",
+        bot_type="baseline",
+        reset_player_on_start=False,
     )
 
     assert settings.authorization_header == full_header
