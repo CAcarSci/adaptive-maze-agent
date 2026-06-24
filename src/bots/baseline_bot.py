@@ -16,7 +16,8 @@ class BaselineMazeBot:
     - backtrack when no unvisited move is available
     - collect score whenever possible
     - remember the first exit found
-    - return to the known exit and leave the maze
+    - remember the first collection point found
+    - collect remaining score before exiting if possible
 
     DFS (Depth-First Search) is a graph traversal algorithm that explores as far as
     possible along each branch before backtracking. It uses a stack to keep track of
@@ -24,7 +25,7 @@ class BaselineMazeBot:
     unvisited neighbors remain.
 
     The goal of this step is not to be optimal yet, but to create a reliable
-    baseline for later data collection and comparison.
+    baseline for later data collection, smarter policy development and evaluation.
     """
 
     def __init__(self, client: MazeClient, max_steps: int = 2_000) -> None:
@@ -33,7 +34,9 @@ class BaselineMazeBot:
 
         self.backtrack_stack: list[str] = []
         self.path_to_current_tile: list[str] = []
+
         self.path_to_exit: list[str] | None = None
+        self.path_to_collection: list[str] | None = None
 
     def solve(self, maze_name: str) -> None:
         print(f"Entering maze: {maze_name}")
@@ -42,8 +45,9 @@ class BaselineMazeBot:
         for step in range(self.max_steps):
             self._print_step(step, state)
 
-            state = self._collect_if_possible(state)
             self._remember_exit_if_possible(state)
+            self._remember_collection_if_possible(state)
+            state = self._collect_if_possible(state)
 
             next_action = self._choose_unvisited_action(state)
 
@@ -62,9 +66,8 @@ class BaselineMazeBot:
             print("No exit discovered. Cannot exit maze safely.")
             return
 
+        state = self._collect_remaining_score_before_exit(state)
         state = self._navigate_to_exit(state)
-
-        state = self._collect_if_possible(state)
 
         if state.can_exit_maze_here:
             print("Exit tile reached. Exiting maze.")
@@ -82,17 +85,25 @@ class BaselineMazeBot:
             f"available_moves={[a.direction for a in state.possible_move_actions]}"
         )
 
+    def _remember_exit_if_possible(self, state: MazeState) -> None:
+        if state.can_exit_maze_here and self.path_to_exit is None:
+            self.path_to_exit = list(self.path_to_current_tile)
+            print(f"Exit discovered. Path to exit stored: {self.path_to_exit}")
+
+    def _remember_collection_if_possible(self, state: MazeState) -> None:
+        if state.can_collect_score_here and self.path_to_collection is None:
+            self.path_to_collection = list(self.path_to_current_tile)
+            print(
+                "Collection point discovered. "
+                f"Path stored: {self.path_to_collection}"
+            )
+
     def _collect_if_possible(self, state: MazeState) -> MazeState:
         if state.can_collect_score_here and state.current_score_in_hand > 0:
             print(f"Collecting score: {state.current_score_in_hand}")
             return self.client.collect_score()
 
         return state
-
-    def _remember_exit_if_possible(self, state: MazeState) -> None:
-        if state.can_exit_maze_here and self.path_to_exit is None:
-            self.path_to_exit = list(self.path_to_current_tile)
-            print(f"Exit discovered. Path to exit stored: {self.path_to_exit}")
 
     def _choose_unvisited_action(self, state: MazeState) -> MoveAction | None:
         actions_by_direction = {
@@ -128,24 +139,62 @@ class BaselineMazeBot:
 
         return self.client.move(direction)
 
+    def _collect_remaining_score_before_exit(self, current_state: MazeState) -> MazeState:
+        if current_state.current_score_in_hand <= 0:
+            return current_state
+
+        if self.path_to_collection is None:
+            print(
+                "Score still in hand, but no collection point is known. "
+                "Proceeding to exit."
+            )
+            return current_state
+
+        print(
+            "Score still in hand after exploration. "
+            f"Navigating to collection point via path: {self.path_to_collection}"
+        )
+
+        if self.path_to_collection == []:
+            state = current_state
+        else:
+            state = self._follow_path(self.path_to_collection)
+
+        state = self._collect_if_possible(state)
+
+        if self.path_to_collection == []:
+            return state
+
+        path_back_to_start = self._reverse_path(self.path_to_collection)
+        print(f"Returning to start via path: {path_back_to_start}")
+
+        return self._follow_path(path_back_to_start)
+
     def _navigate_to_exit(self, current_state: MazeState) -> MazeState:
         if self.path_to_exit is None:
             raise RuntimeError("Cannot navigate to exit because no exit is known.")
 
-        if self.path_to_exit == self.path_to_current_tile:
-            print("Already on known exit tile.")
-            return current_state
-
         if self.path_to_exit == []:
-            print("Exit is located on the start tile. Current DFS position should be start.")
+            print("Exit is located on the start tile.")
             return current_state
 
         print(f"Navigating to known exit via path: {self.path_to_exit}")
+        return self._follow_path(self.path_to_exit)
 
-        state = current_state
+    def _follow_path(self, path: list[str]) -> MazeState:
+        state: MazeState | None = None
 
-        for direction in self.path_to_exit:
+        for direction in path:
             print(f"Following path direction: {direction}")
             state = self.client.move(direction)
 
+        if state is None:
+            raise RuntimeError("Cannot follow an empty path without current state.")
+
         return state
+
+    def _reverse_path(self, path: list[str]) -> list[str]:
+        return [
+            OPPOSITE_DIRECTION[direction]
+            for direction in reversed(path)
+        ]

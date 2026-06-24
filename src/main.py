@@ -48,7 +48,18 @@ def main() -> None:
     print(f"Selected maze: {maze_name}")
 
     bot = BaselineMazeBot(client=client)
-    bot.solve(maze_name)
+
+    try:
+        bot.solve(maze_name)
+    except MazeApiError as error:
+        if "already played this maze" in str(error).lower():
+            print(
+                f"Maze '{maze_name}' was already played with this token. "
+                "Choose another maze in DEFAULT_MAZE_NAME."
+            )
+            return
+
+        raise
 
     print("\nCurrent player after run:")
     print(client.get_player())
