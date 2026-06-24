@@ -1,3 +1,5 @@
-requests
-python-dotenv
+pandas
 pytest
+python-dotenv
+requests
+tabulate

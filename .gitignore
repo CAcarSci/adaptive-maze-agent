@@ -222,5 +222,7 @@ __marimo__/
 # MLflow
 mlruns/
 models/
-experiments/
-reports/
+experiments/*.csv
+experiments/*.json
+reports/*.csv
+reports/*.json

@@ -1,12 +1,14 @@
 from src.bots.baseline_bot import BaselineMazeBot
 from src.config import load_settings
+from src.data.telemetry_logger import TelemetryLogger
 from src.maze_client import MazeApiError, MazeClient
 
 
 def ensure_clean_player(client: MazeClient, player_name: str) -> None:
     """
     During development the player can remain inside a maze after a failed or
-    interrupted run. For Step 1 we reset the player to make runs reproducible.
+    interrupted run. For Step 1 and Step 2 we reset the player to make runs
+    reproducible.
     """
     try:
         player = client.get_player()
@@ -47,7 +49,14 @@ def main() -> None:
     maze_name = settings.default_maze_name
     print(f"Selected maze: {maze_name}")
 
-    bot = BaselineMazeBot(client=client)
+    telemetry_logger = TelemetryLogger(
+        output_path="experiments/action_logs.csv"
+    )
+
+    bot = BaselineMazeBot(
+        client=client,
+        telemetry_logger=telemetry_logger,
+    )
 
     try:
         bot.solve(maze_name)
@@ -63,6 +72,9 @@ def main() -> None:
 
     print("\nCurrent player after run:")
     print(client.get_player())
+
+    print("\nTelemetry written to:")
+    print("experiments/action_logs.csv")
 
 
 if __name__ == "__main__":

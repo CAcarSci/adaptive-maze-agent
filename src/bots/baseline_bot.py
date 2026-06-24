@@ -1,3 +1,4 @@
+from src.data.telemetry_logger import TelemetryLogger
 from src.maze_client import MazeClient
 from src.models import (
     DIRECTION_ORDER,
@@ -28,9 +29,17 @@ class BaselineMazeBot:
     baseline for later data collection, smarter policy development and evaluation.
     """
 
-    def __init__(self, client: MazeClient, max_steps: int = 2_000) -> None:
+    BOT_NAME = "baseline_dfs"
+
+    def __init__(
+        self,
+        client: MazeClient,
+        max_steps: int = 2_000,
+        telemetry_logger: TelemetryLogger | None = None,
+    ) -> None:
         self.client = client
         self.max_steps = max_steps
+        self.telemetry_logger = telemetry_logger
 
         self.backtrack_stack: list[str] = []
         self.path_to_current_tile: list[str] = []
@@ -52,13 +61,35 @@ class BaselineMazeBot:
             next_action = self._choose_unvisited_action(state)
 
             if next_action is not None:
+                self._log_decision(
+                    maze_name=maze_name,
+                    step=step,
+                    state=state,
+                    decision_type="explore",
+                    chosen_direction=next_action.direction,
+                )
                 state = self._move_forward(next_action)
                 continue
 
             if self.backtrack_stack:
+                backtrack_direction = self.backtrack_stack[-1]
+                self._log_decision(
+                    maze_name=maze_name,
+                    step=step,
+                    state=state,
+                    decision_type="backtrack",
+                    chosen_direction=backtrack_direction,
+                )
                 state = self._backtrack()
                 continue
 
+            self._log_decision(
+                maze_name=maze_name,
+                step=step,
+                state=state,
+                decision_type="stop",
+                chosen_direction=None,
+            )
             print("No unvisited actions and no backtracking left. Exploration complete.")
             break
 
@@ -198,3 +229,26 @@ class BaselineMazeBot:
             OPPOSITE_DIRECTION[direction]
             for direction in reversed(path)
         ]
+
+    def _log_decision(
+        self,
+        *,
+        maze_name: str,
+        step: int,
+        state: MazeState,
+        decision_type: str,
+        chosen_direction: str | None,
+    ) -> None:
+        if self.telemetry_logger is None:
+            return
+
+        self.telemetry_logger.log_decision(
+            maze_name=maze_name,
+            bot_name=self.BOT_NAME,
+            phase="exploration",
+            step=step,
+            decision_type=decision_type,
+            state=state,
+            chosen_direction=chosen_direction,
+            path_depth=len(self.path_to_current_tile),
+        )
