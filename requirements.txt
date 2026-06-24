@@ -1,5 +1,8 @@
+joblib
+matplotlib
 pandas
 pytest
 python-dotenv
 requests
+scikit-learn
 tabulate

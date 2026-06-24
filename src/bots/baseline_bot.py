@@ -1,45 +1,43 @@
 from src.data.telemetry_logger import TelemetryLogger
 from src.maze_client import MazeClient
 from src.models import (
-    DIRECTION_ORDER,
     OPPOSITE_DIRECTION,
     MazeState,
     MoveAction,
 )
+from src.policies.baseline_policy import BaselineDfsPolicy
+from src.policies.navigation_policy import NavigationContext, NavigationPolicy
 
 
 class BaselineMazeBot:
     """
-    Step 1 baseline bot.
+    Reusable maze bot orchestration.
 
-    This bot intentionally uses a simple DFS-like exploration strategy:
-    - explore unvisited tiles first
-    - backtrack when no unvisited move is available
-    - collect score whenever possible
-    - remember the first exit found
-    - remember the first collection point found
-    - collect remaining score before exiting if possible
+    The bot controls the maze-solving flow:
+    - enter maze
+    - explore
+    - backtrack
+    - collect score
+    - remember exit
+    - remember collection point
+    - exit safely
 
-    DFS (Depth-First Search) is a graph traversal algorithm that explores as far as
-    possible along each branch before backtracking. It uses a stack to keep track of
-    the path, visiting unvisited neighbors and returning to previous nodes when no
-    unvisited neighbors remain.
-
-    The goal of this step is not to be optimal yet, but to create a reliable
-    baseline for later data collection, smarter policy development and evaluation.
+    The actual decision strategy is delegated to a NavigationPolicy.
+    This allows us to compare a baseline policy with smarter policies without
+    duplicating the full bot orchestration.
     """
-
-    BOT_NAME = "baseline_dfs"
 
     def __init__(
         self,
         client: MazeClient,
         max_steps: int = 2_000,
         telemetry_logger: TelemetryLogger | None = None,
+        policy: NavigationPolicy | None = None,
     ) -> None:
         self.client = client
         self.max_steps = max_steps
         self.telemetry_logger = telemetry_logger
+        self.policy = policy or BaselineDfsPolicy()
 
         self.backtrack_stack: list[str] = []
         self.path_to_current_tile: list[str] = []
@@ -49,6 +47,8 @@ class BaselineMazeBot:
 
     def solve(self, maze_name: str) -> None:
         print(f"Entering maze: {maze_name}")
+        print(f"Using policy: {self.policy.name}")
+
         state = self.client.enter_maze(maze_name)
 
         for step in range(self.max_steps):
@@ -58,7 +58,11 @@ class BaselineMazeBot:
             self._remember_collection_if_possible(state)
             state = self._collect_if_possible(state)
 
-            next_action = self._choose_unvisited_action(state)
+            next_action = self._choose_forward_action(
+                maze_name=maze_name,
+                step=step,
+                state=state,
+            )
 
             if next_action is not None:
                 self._log_decision(
@@ -136,19 +140,25 @@ class BaselineMazeBot:
 
         return state
 
-    def _choose_unvisited_action(self, state: MazeState) -> MoveAction | None:
-        actions_by_direction = {
-            action.direction: action
-            for action in state.possible_move_actions
-        }
+    def _choose_forward_action(
+        self,
+        *,
+        maze_name: str,
+        step: int,
+        state: MazeState,
+    ) -> MoveAction | None:
+        context = NavigationContext(
+            maze_name=maze_name,
+            step=step,
+            path_depth=len(self.path_to_current_tile),
+            has_known_exit=self.path_to_exit is not None,
+            has_known_collection_point=self.path_to_collection is not None,
+        )
 
-        for direction in DIRECTION_ORDER:
-            action = actions_by_direction.get(direction)
-
-            if action is not None and not action.has_been_visited:
-                return action
-
-        return None
+        return self.policy.choose_action(
+            state=state,
+            context=context,
+        )
 
     def _move_forward(self, action: MoveAction) -> MazeState:
         print(
@@ -244,7 +254,7 @@ class BaselineMazeBot:
 
         self.telemetry_logger.log_decision(
             maze_name=maze_name,
-            bot_name=self.BOT_NAME,
+            bot_name=self.policy.name,
             phase="exploration",
             step=step,
             decision_type=decision_type,

@@ -1,15 +1,31 @@
 from src.bots.baseline_bot import BaselineMazeBot
-from src.config import load_settings
+from src.bots.decision_tree_bot import DecisionTreeMazeBot
+from src.bots.smart_bot import SmartMazeBot
+from src.config import Settings, load_settings
 from src.data.telemetry_logger import TelemetryLogger
 from src.maze_client import MazeApiError, MazeClient
 
 
-def ensure_clean_player(client: MazeClient, player_name: str) -> None:
+def ensure_clean_player(
+    *,
+    client: MazeClient,
+    player_name: str,
+    reset_player_on_start: bool,
+) -> None:
     """
     During development the player can remain inside a maze after a failed or
-    interrupted run. For Step 1 and Step 2 we reset the player to make runs
-    reproducible.
+    interrupted run.
+
+    If reset_player_on_start is enabled, the player is reset at the start of
+    each run. This makes local comparison between baseline and smart bot easier.
     """
+    if reset_player_on_start:
+        print("RESET_PLAYER_ON_START=true. Resetting player state...")
+        try:
+            client.forget_player()
+        except MazeApiError:
+            pass
+
     try:
         player = client.get_player()
 
@@ -36,6 +52,36 @@ def ensure_clean_player(client: MazeClient, player_name: str) -> None:
             raise
 
 
+def create_bot(
+    *,
+    settings: Settings,
+    client: MazeClient,
+    telemetry_logger: TelemetryLogger,
+) -> BaselineMazeBot:
+    if settings.bot_type == "baseline":
+        return BaselineMazeBot(
+            client=client,
+            telemetry_logger=telemetry_logger,
+        )
+
+    if settings.bot_type == "smart":
+        return SmartMazeBot(
+            client=client,
+            telemetry_logger=telemetry_logger,
+        )
+
+    if settings.bot_type in {"decision_tree", "decision-tree", "tree"}:
+        return DecisionTreeMazeBot(
+            client=client,
+            telemetry_logger=telemetry_logger,
+        )
+
+    raise ValueError(
+        f"Unsupported BOT_TYPE='{settings.bot_type}'. "
+        "Use 'baseline', 'smart' or 'decision_tree'."
+    )
+
+
 def main() -> None:
     settings = load_settings()
 
@@ -44,16 +90,22 @@ def main() -> None:
         authorization_header=settings.authorization_header,
     )
 
-    ensure_clean_player(client, settings.player_name)
+    ensure_clean_player(
+        client=client,
+        player_name=settings.player_name,
+        reset_player_on_start=settings.reset_player_on_start,
+    )
 
     maze_name = settings.default_maze_name
     print(f"Selected maze: {maze_name}")
+    print(f"Selected bot type: {settings.bot_type}")
 
     telemetry_logger = TelemetryLogger(
         output_path="experiments/action_logs.csv"
     )
 
-    bot = BaselineMazeBot(
+    bot = create_bot(
+        settings=settings,
         client=client,
         telemetry_logger=telemetry_logger,
     )
@@ -64,7 +116,8 @@ def main() -> None:
         if "already played this maze" in str(error).lower():
             print(
                 f"Maze '{maze_name}' was already played with this token. "
-                "Choose another maze in DEFAULT_MAZE_NAME."
+                "Choose another maze in DEFAULT_MAZE_NAME or enable "
+                "RESET_PLAYER_ON_START=true for local development."
             )
             return
 
