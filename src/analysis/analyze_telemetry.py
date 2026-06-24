@@ -458,8 +458,8 @@ def write_report(df: pd.DataFrame, output_path: Path) -> None:
     else:
         conclusion = (
             "The dataset currently contains telemetry for a single bot policy. "
-            "The next step is to run both the baseline and smart bot on comparable "
-            "mazes, then use the resulting telemetry for a formal evaluation."
+            "The next step is to run baseline, reward-aware and Decision Tree bots "
+            "on comparable mazes, then use the resulting telemetry for a formal evaluation."
         )
 
     lines = [

@@ -6,23 +6,24 @@ The goal of this analysis is to inspect navigation telemetry and compare behavio
 
 ## Overall Summary
 
-- Rows logged: `313`
-- Unique runs: `4`
+- Rows logged: `471`
+- Unique runs: `6`
 - Mazes observed: `Example Maze, Gradius Pathways, Hello Maze`
-- Bot policies observed: `baseline_dfs, reward_aware`
-- Decision steps logged: `132`
-- Chosen actions logged: `128`
+- Bot policies observed: `baseline_dfs, decision_tree, reward_aware`
+- Decision steps logged: `198`
+- Chosen actions logged: `192`
 
 ## Runs by Bot Policy and Maze
 
 This section shows which bot policies and mazes are represented in the telemetry dataset.
 
-| bot_name     | maze_name        |   rows |   unique_runs |   decision_steps |   max_step |   max_score_in_hand |   max_score_in_bag |
-|:-------------|:-----------------|-------:|--------------:|-----------------:|-----------:|--------------------:|-------------------:|
-| baseline_dfs | Example Maze     |     79 |             1 |               33 |         32 |                  52 |                 94 |
-| baseline_dfs | Gradius Pathways |    126 |             1 |               51 |         50 |                 140 |                 92 |
-| baseline_dfs | Hello Maze       |     29 |             1 |               15 |         14 |                  51 |                 52 |
-| reward_aware | Example Maze     |     79 |             1 |               33 |         32 |                  52 |                 94 |
+| bot_name      | maze_name        |   rows |   unique_runs |   decision_steps |   max_step |   max_score_in_hand |   max_score_in_bag |
+|:--------------|:-----------------|-------:|--------------:|-----------------:|-----------:|--------------------:|-------------------:|
+| baseline_dfs  | Example Maze     |     79 |             1 |               33 |         32 |                  52 |                 94 |
+| baseline_dfs  | Gradius Pathways |    126 |             1 |               51 |         50 |                 140 |                 92 |
+| baseline_dfs  | Hello Maze       |     29 |             1 |               15 |         14 |                  51 |                 52 |
+| decision_tree | Example Maze     |    158 |             2 |               33 |         32 |                  52 |                 94 |
+| reward_aware  | Example Maze     |     79 |             1 |               33 |         32 |                  52 |                 94 |
 
 ## Reward Distribution
 
@@ -30,9 +31,9 @@ This section looks at the immediate reward available on candidate destination ti
 
 | metric   |   value |
 |:---------|--------:|
-| count    | 313     |
-| mean     |   2.115 |
-| std      |   4.048 |
+| count    | 471     |
+| mean     |   2.017 |
+| std      |   3.969 |
 | min      |   0     |
 | 25%      |   0     |
 | 50%      |   0     |
@@ -43,34 +44,40 @@ This section looks at the immediate reward available on candidate destination ti
 
 This compares the reward profile of available candidate actions with the actions actually selected by each bot policy.
 
-| bot_name     |   candidate_rows |   avg_available_reward |   median_available_reward |   max_available_reward |   avg_available_actions |   chosen_rows |   avg_chosen_reward |   median_chosen_reward |   max_chosen_reward |   avg_chosen_visit_count |   chosen_reward_lift_vs_available_avg |
-|:-------------|-----------------:|-----------------------:|--------------------------:|-----------------------:|------------------------:|--------------:|--------------------:|-----------------------:|--------------------:|-------------------------:|--------------------------------------:|
-| baseline_dfs |              234 |                  2.214 |                         0 |                     10 |                   2.65  |            96 |               4.042 |                      0 |                  10 |                    0.573 |                                 1.828 |
-| reward_aware |               79 |                  1.823 |                         0 |                     10 |                   2.671 |            32 |               3.25  |                      0 |                  10 |                    0.594 |                                 1.427 |
+| bot_name      |   candidate_rows |   avg_available_reward |   median_available_reward |   max_available_reward |   avg_available_actions |   chosen_rows |   avg_chosen_reward |   median_chosen_reward |   max_chosen_reward |   avg_chosen_visit_count |   chosen_reward_lift_vs_available_avg |
+|:--------------|-----------------:|-----------------------:|--------------------------:|-----------------------:|------------------------:|--------------:|--------------------:|-----------------------:|--------------------:|-------------------------:|--------------------------------------:|
+| baseline_dfs  |              234 |                  2.214 |                         0 |                     10 |                   2.65  |            96 |               4.042 |                      0 |                  10 |                    0.573 |                                 1.828 |
+| decision_tree |              158 |                  1.823 |                         0 |                     10 |                   2.671 |            64 |               3.25  |                      0 |                  10 |                    0.594 |                                 1.427 |
+| reward_aware  |               79 |                  1.823 |                         0 |                     10 |                   2.671 |            32 |               3.25  |                      0 |                  10 |                    0.594 |                                 1.427 |
 
 ## Chosen vs Non-Chosen Candidate Actions
 
 This compares selected candidate actions with the alternatives that were available at the same decision point, grouped by bot policy.
 
-| bot_name     | is_chosen   |   rows |   avg_reward |   median_reward |   max_reward |   avg_candidate_visit_count |
-|:-------------|:------------|-------:|-------------:|----------------:|-------------:|----------------------------:|
-| baseline_dfs | False       |    138 |        0.942 |               0 |           10 |                       1.333 |
-| baseline_dfs | True        |     96 |        4.042 |               0 |           10 |                       0.573 |
-| reward_aware | False       |     47 |        0.851 |               0 |           10 |                       1.277 |
-| reward_aware | True        |     32 |        3.25  |               0 |           10 |                       0.594 |
+| bot_name      | is_chosen   |   rows |   avg_reward |   median_reward |   max_reward |   avg_candidate_visit_count |
+|:--------------|:------------|-------:|-------------:|----------------:|-------------:|----------------------------:|
+| baseline_dfs  | False       |    138 |        0.942 |               0 |           10 |                       1.333 |
+| baseline_dfs  | True        |     96 |        4.042 |               0 |           10 |                       0.573 |
+| decision_tree | False       |     94 |        0.851 |               0 |           10 |                       1.277 |
+| decision_tree | True        |     64 |        3.25  |               0 |           10 |                       0.594 |
+| reward_aware  | False       |     47 |        0.851 |               0 |           10 |                       1.277 |
+| reward_aware  | True        |     32 |        3.25  |               0 |           10 |                       0.594 |
 
 ## Decision Type Summary
 
 This section summarizes exploration and backtracking behavior by bot policy.
 
-| bot_name     | decision_type   |   rows |   chosen_rows |   avg_reward |   avg_available_actions |   avg_path_depth |
-|:-------------|:----------------|-------:|--------------:|-------------:|------------------------:|-----------------:|
-| baseline_dfs | backtrack       |    108 |            48 |        0     |                   2.537 |            8.056 |
-| baseline_dfs | explore         |    122 |            48 |        4.246 |                   2.787 |            7.557 |
-| baseline_dfs | stop            |      4 |             0 |        0     |                   1.5   |            0     |
-| reward_aware | backtrack       |     36 |            16 |        0     |                   2.556 |            6.139 |
-| reward_aware | explore         |     41 |            16 |        3.512 |                   2.805 |            5.195 |
-| reward_aware | stop            |      2 |             0 |        0     |                   2     |            0     |
+| bot_name      | decision_type   |   rows |   chosen_rows |   avg_reward |   avg_available_actions |   avg_path_depth |
+|:--------------|:----------------|-------:|--------------:|-------------:|------------------------:|-----------------:|
+| baseline_dfs  | backtrack       |    108 |            48 |        0     |                   2.537 |            8.056 |
+| baseline_dfs  | explore         |    122 |            48 |        4.246 |                   2.787 |            7.557 |
+| baseline_dfs  | stop            |      4 |             0 |        0     |                   1.5   |            0     |
+| decision_tree | backtrack       |     72 |            32 |        0     |                   2.556 |            6.139 |
+| decision_tree | explore         |     82 |            32 |        3.512 |                   2.805 |            5.195 |
+| decision_tree | stop            |      4 |             0 |        0     |                   2     |            0     |
+| reward_aware  | backtrack       |     36 |            16 |        0     |                   2.556 |            6.139 |
+| reward_aware  | explore         |     41 |            16 |        3.512 |                   2.805 |            5.195 |
+| reward_aware  | stop            |      2 |             0 |        0     |                   2     |            0     |
 
 ## Reward Patterns by Candidate Flags
 
@@ -78,39 +85,47 @@ This section checks whether immediate rewards differ across candidate tile prope
 
 ### Reward by `candidate_has_been_visited`
 
-| bot_name     | candidate_has_been_visited   |   rows |   avg_reward |   median_reward |   max_reward |
-|:-------------|:-----------------------------|-------:|-------------:|----------------:|-------------:|
-| baseline_dfs | False                        |     64 |        8.094 |              10 |           10 |
-| baseline_dfs | True                         |    170 |        0     |               0 |            0 |
-| reward_aware | False                        |     23 |        6.261 |              10 |           10 |
-| reward_aware | True                         |     56 |        0     |               0 |            0 |
+| bot_name      | candidate_has_been_visited   |   rows |   avg_reward |   median_reward |   max_reward |
+|:--------------|:-----------------------------|-------:|-------------:|----------------:|-------------:|
+| baseline_dfs  | False                        |     64 |        8.094 |              10 |           10 |
+| baseline_dfs  | True                         |    170 |        0     |               0 |            0 |
+| decision_tree | False                        |     46 |        6.261 |              10 |           10 |
+| decision_tree | True                         |    112 |        0     |               0 |            0 |
+| reward_aware  | False                        |     23 |        6.261 |              10 |           10 |
+| reward_aware  | True                         |     56 |        0     |               0 |            0 |
 
 ### Reward by `candidate_allows_exit`
 
-| bot_name     | candidate_allows_exit   |   rows |   avg_reward |   median_reward |   max_reward |
-|:-------------|:------------------------|-------:|-------------:|----------------:|-------------:|
-| baseline_dfs | False                   |    215 |        2.391 |               0 |           10 |
-| baseline_dfs | True                    |     19 |        0.211 |               0 |            1 |
-| reward_aware | False                   |     70 |        2.029 |               0 |           10 |
-| reward_aware | True                    |      9 |        0.222 |               0 |            1 |
+| bot_name      | candidate_allows_exit   |   rows |   avg_reward |   median_reward |   max_reward |
+|:--------------|:------------------------|-------:|-------------:|----------------:|-------------:|
+| baseline_dfs  | False                   |    215 |        2.391 |               0 |           10 |
+| baseline_dfs  | True                    |     19 |        0.211 |               0 |            1 |
+| decision_tree | False                   |    140 |        2.029 |               0 |           10 |
+| decision_tree | True                    |     18 |        0.222 |               0 |            1 |
+| reward_aware  | False                   |     70 |        2.029 |               0 |           10 |
+| reward_aware  | True                    |      9 |        0.222 |               0 |            1 |
 
 ### Reward by `candidate_allows_score_collection`
 
-| bot_name     | candidate_allows_score_collection   |   rows |   avg_reward |   median_reward |   max_reward |
-|:-------------|:------------------------------------|-------:|-------------:|----------------:|-------------:|
-| baseline_dfs | False                               |    223 |        2.305 |               0 |           10 |
-| baseline_dfs | True                                |     11 |        0.364 |               0 |            1 |
-| reward_aware | False                               |     72 |        1.972 |               0 |           10 |
-| reward_aware | True                                |      7 |        0.286 |               0 |            1 |
+| bot_name      | candidate_allows_score_collection   |   rows |   avg_reward |   median_reward |   max_reward |
+|:--------------|:------------------------------------|-------:|-------------:|----------------:|-------------:|
+| baseline_dfs  | False                               |    223 |        2.305 |               0 |           10 |
+| baseline_dfs  | True                                |     11 |        0.364 |               0 |            1 |
+| decision_tree | False                               |    144 |        1.972 |               0 |           10 |
+| decision_tree | True                                |     14 |        0.286 |               0 |            1 |
+| reward_aware  | False                               |     72 |        1.972 |               0 |           10 |
+| reward_aware  | True                                |      7 |        0.286 |               0 |            1 |
 
 ### Reward by `candidate_is_start`
 
-| bot_name     | candidate_is_start   |   rows |   avg_reward |   median_reward |   max_reward |
-|:-------------|:---------------------|-------:|-------------:|----------------:|-------------:|
-| baseline_dfs | False                |    227 |        2.282 |               0 |           10 |
-| baseline_dfs | True                 |      7 |        0     |               0 |            0 |
-| reward_aware | False                |     76 |        1.895 |               0 |           10 |
-| reward_aware | True                 |      3 |        0     |               0 |            0 |
+| bot_name      | candidate_is_start   |   rows |   avg_reward |   median_reward |   max_reward |
+|:--------------|:---------------------|-------:|-------------:|----------------:|-------------:|
+| baseline_dfs  | False                |    227 |        2.282 |               0 |           10 |
+| baseline_dfs  | True                 |      7 |        0     |               0 |            0 |
+| decision_tree | False                |    152 |        1.895 |               0 |           10 |
+| decision_tree | True                 |      6 |        0     |               0 |            0 |
+| reward_aware  | False                |     76 |        1.895 |               0 |           10 |
+| reward_aware  | True                 |      3 |        0     |               0 |            0 |
 
 ## Reward by Current Tile Branching Factor
 
@@ -118,16 +133,20 @@ This is an initial approximation for checking whether rewards differ when the bo
 
 Important note: `candidate_reward_on_destination` describes the reward on the destination tile, while `available_action_count` describes the current tile. A more precise dead-end/junction analysis will require reconstructing tile-level graph features in a later iteration.
 
-| bot_name     |   current_tile_available_actions |   rows |   avg_reward |   median_reward |   max_reward |
-|:-------------|---------------------------------:|-------:|-------------:|----------------:|-------------:|
-| baseline_dfs |                                1 |     11 |        1.818 |               0 |           10 |
-| baseline_dfs |                                2 |    104 |        1.615 |               0 |           10 |
-| baseline_dfs |                                3 |     75 |        2.933 |               0 |           10 |
-| baseline_dfs |                                4 |     44 |        2.5   |               0 |           10 |
-| reward_aware |                                1 |      2 |        0     |               0 |            0 |
-| reward_aware |                                2 |     42 |        1.286 |               0 |           10 |
-| reward_aware |                                3 |     15 |        2.667 |               0 |           10 |
-| reward_aware |                                4 |     20 |        2.5   |               0 |           10 |
+| bot_name      |   current_tile_available_actions |   rows |   avg_reward |   median_reward |   max_reward |
+|:--------------|---------------------------------:|-------:|-------------:|----------------:|-------------:|
+| baseline_dfs  |                                1 |     11 |        1.818 |               0 |           10 |
+| baseline_dfs  |                                2 |    104 |        1.615 |               0 |           10 |
+| baseline_dfs  |                                3 |     75 |        2.933 |               0 |           10 |
+| baseline_dfs  |                                4 |     44 |        2.5   |               0 |           10 |
+| decision_tree |                                1 |      4 |        0     |               0 |            0 |
+| decision_tree |                                2 |     84 |        1.286 |               0 |           10 |
+| decision_tree |                                3 |     30 |        2.667 |               0 |           10 |
+| decision_tree |                                4 |     40 |        2.5   |               0 |           10 |
+| reward_aware  |                                1 |      2 |        0     |               0 |            0 |
+| reward_aware  |                                2 |     42 |        1.286 |               0 |           10 |
+| reward_aware  |                                3 |     15 |        2.667 |               0 |           10 |
+| reward_aware  |                                4 |     20 |        2.5   |               0 |           10 |
 
 ## Initial Feature Signals
 
@@ -136,13 +155,13 @@ This table shows simple correlations with immediate destination reward. It is no
 | feature                           |   correlation_with_reward |
 |:----------------------------------|--------------------------:|
 | candidate_reward_on_destination   |                     1     |
-| available_action_count            |                     0.118 |
-| path_depth                        |                    -0.086 |
+| available_action_count            |                     0.133 |
 | candidate_is_start                |                    -0.095 |
-| candidate_allows_score_collection |                    -0.109 |
-| candidate_allows_exit             |                    -0.147 |
-| candidate_visit_count             |                    -0.667 |
-| candidate_has_been_visited        |                    -0.844 |
+| path_depth                        |                    -0.102 |
+| candidate_allows_score_collection |                    -0.116 |
+| candidate_allows_exit             |                    -0.149 |
+| candidate_visit_count             |                    -0.645 |
+| candidate_has_been_visited        |                    -0.811 |
 
 ## Initial Feature Signals by Bot Policy
 
@@ -160,6 +179,19 @@ This section repeats the feature correlation analysis per bot policy. This becom
 | candidate_allows_exit             |                    -0.145 |
 | candidate_visit_count             |                    -0.689 |
 | candidate_has_been_visited        |                    -0.877 |
+
+### Feature Signals for `decision_tree`
+
+| feature                           |   correlation_with_reward |
+|:----------------------------------|--------------------------:|
+| candidate_reward_on_destination   |                     1     |
+| available_action_count            |                     0.164 |
+| candidate_is_start                |                    -0.095 |
+| candidate_allows_score_collection |                    -0.126 |
+| candidate_allows_exit             |                    -0.151 |
+| path_depth                        |                    -0.174 |
+| candidate_visit_count             |                    -0.603 |
+| candidate_has_been_visited        |                    -0.748 |
 
 ### Feature Signals for `reward_aware`
 

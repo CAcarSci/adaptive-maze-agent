@@ -1,4 +1,5 @@
 from src.bots.baseline_bot import BaselineMazeBot
+from src.bots.decision_tree_bot import DecisionTreeMazeBot
 from src.bots.smart_bot import SmartMazeBot
 from src.config import Settings, load_settings
 from src.data.telemetry_logger import TelemetryLogger
@@ -69,9 +70,15 @@ def create_bot(
             telemetry_logger=telemetry_logger,
         )
 
+    if settings.bot_type in {"decision_tree", "decision-tree", "tree"}:
+        return DecisionTreeMazeBot(
+            client=client,
+            telemetry_logger=telemetry_logger,
+        )
+
     raise ValueError(
         f"Unsupported BOT_TYPE='{settings.bot_type}'. "
-        "Use 'baseline' or 'smart'."
+        "Use 'baseline', 'smart' or 'decision_tree'."
     )
 
 

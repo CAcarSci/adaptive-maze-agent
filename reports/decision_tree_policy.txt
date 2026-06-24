@@ -1,0 +1,22 @@
+|--- candidate_visit_count <= 0.50
+|   |--- candidate_has_been_visited <= 0.50
+|   |   |--- class: 1
+|   |--- candidate_has_been_visited >  0.50
+|   |   |--- candidate_allows_exit <= 0.50
+|   |   |   |--- path_depth <= 0.50
+|   |   |   |   |--- class: 1
+|   |   |   |--- path_depth >  0.50
+|   |   |   |   |--- class: 1
+|   |   |--- candidate_allows_exit >  0.50
+|   |   |   |--- class: 1
+|--- candidate_visit_count >  0.50
+|   |--- candidate_allows_score_collection <= 0.50
+|   |   |--- can_collect_score_here <= 0.50
+|   |   |   |--- can_exit_maze_here <= 0.50
+|   |   |   |   |--- class: 0
+|   |   |   |--- can_exit_maze_here >  0.50
+|   |   |   |   |--- class: 0
+|   |   |--- can_collect_score_here >  0.50
+|   |   |   |--- class: 0
+|   |--- candidate_allows_score_collection >  0.50
+|   |   |--- class: 1
