@@ -557,7 +557,7 @@ The visual tree can be opened locally:
 open reports/decision_tree_policy.png
 ```
 
-The Decision Tree graph is useful during the technical interview because it shows which candidate-action features the model used to make decisions.
+The Decision Tree graph is useful because it shows which candidate-action features the model used to make decisions.
 
 ## Running the Decision Tree Bot
 

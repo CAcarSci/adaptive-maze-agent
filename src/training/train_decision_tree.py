@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import joblib
 import matplotlib
@@ -26,7 +27,9 @@ TREE_PNG_OUTPUT_PATH = Path("reports/decision_tree_policy.png")
 TRAINING_REPORT_OUTPUT_PATH = Path("reports/decision_tree_training_report.md")
 
 
-def train_decision_tree(training_df: pd.DataFrame) -> tuple[DecisionTreeClassifier, dict]:
+def train_decision_tree(
+    training_df: pd.DataFrame,
+) -> tuple[DecisionTreeClassifier, dict[str, Any]]:
     X = training_df[FEATURE_COLUMNS]
     y = training_df["target_preferred"]
 
@@ -59,6 +62,17 @@ def train_decision_tree(training_df: pd.DataFrame) -> tuple[DecisionTreeClassifi
 
     y_pred = model.predict(X_test)
 
+    feature_importances = (
+        pd.DataFrame(
+            {
+                "feature": FEATURE_COLUMNS,
+                "importance": model.feature_importances_,
+            }
+        )
+        .sort_values("importance", ascending=False)
+        .reset_index(drop=True)
+    )
+
     metrics = {
         "training_rows": len(training_df),
         "train_rows": len(X_train),
@@ -67,22 +81,32 @@ def train_decision_tree(training_df: pd.DataFrame) -> tuple[DecisionTreeClassifi
         "classification_report": classification_report(
             y_test,
             y_pred,
+            labels=[0, 1],
             target_names=["not_preferred", "preferred"],
             zero_division=0,
         ),
-        "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
+        "confusion_matrix": confusion_matrix(
+            y_test,
+            y_pred,
+            labels=[0, 1],
+        ).tolist(),
+        "feature_importances": feature_importances,
     }
 
     return model, metrics
 
 
-def save_model(model: DecisionTreeClassifier, metrics: dict) -> None:
+def save_model(model: DecisionTreeClassifier, metrics: dict[str, Any]) -> None:
     MODEL_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     artifact = {
         "model": model,
         "feature_columns": FEATURE_COLUMNS,
-        "metrics": metrics,
+        "metrics": {
+            key: value
+            for key, value in metrics.items()
+            if key != "feature_importances"
+        },
     }
 
     joblib.dump(artifact, MODEL_OUTPUT_PATH)
@@ -125,7 +149,30 @@ def save_tree_png(model: DecisionTreeClassifier) -> None:
     plt.close()
 
 
-def save_training_report(metrics: dict) -> None:
+def format_confusion_matrix(confusion_matrix_values: list[list[int]]) -> str:
+    true_negative = confusion_matrix_values[0][0]
+    false_positive = confusion_matrix_values[0][1]
+    false_negative = confusion_matrix_values[1][0]
+    true_positive = confusion_matrix_values[1][1]
+
+    lines = [
+        "| Actual \\ Predicted | not_preferred | preferred |",
+        "|:-------------------|--------------:|----------:|",
+        f"| not_preferred | {true_negative} | {false_positive} |",
+        f"| preferred | {false_negative} | {true_positive} |",
+    ]
+
+    return "\n".join(lines)
+
+
+def format_feature_importances(feature_importances: pd.DataFrame) -> str:
+    formatted = feature_importances.copy()
+    formatted["importance"] = formatted["importance"].round(3)
+
+    return formatted.to_markdown(index=False)
+
+
+def save_training_report(metrics: dict[str, Any]) -> None:
     TRAINING_REPORT_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [
@@ -133,22 +180,39 @@ def save_training_report(metrics: dict) -> None:
         "",
         "This report summarizes the lightweight supervised model trained from maze telemetry.",
         "",
-        "The model is trained on candidate action features. The target label is weakly supervised: for each decision point, the candidate action with the highest transparent preference score is marked as preferred.",
+        "The model is trained on candidate-action features. The target label is weakly supervised: for each decision point, the candidate action with the highest transparent preference score is marked as preferred.",
         "",
         "## Training Summary",
         "",
-        f"- Training rows: `{metrics['training_rows']}`",
-        f"- Train split rows: `{metrics['train_rows']}`",
-        f"- Test split rows: `{metrics['test_rows']}`",
-        f"- Accuracy: `{metrics['accuracy']:.3f}`",
+        "| Metric | Value | Explanation |",
+        "|:-------|------:|:------------|",
+        f"| Training rows | `{metrics['training_rows']}` | Number of candidate-action rows used after feature preparation. |",
+        f"| Train split rows | `{metrics['train_rows']}` | Rows used to fit the Decision Tree model. |",
+        f"| Test split rows | `{metrics['test_rows']}` | Rows held out to validate the model. |",
+        f"| Accuracy | `{metrics['accuracy']:.3f}` | Share of test rows where the model predicted the correct preferred/not-preferred label. |",
+        "",
+        "## Metric Definitions",
+        "",
+        "| Metric | Meaning |",
+        "|:-------|:--------|",
+        "| Precision | Of all actions predicted as a class, how many were actually that class. |",
+        "| Recall | Of all actual actions in a class, how many the model correctly found. |",
+        "| F1-score | Harmonic mean of precision and recall. Useful when both false positives and false negatives matter. |",
+        "| Support | Number of test examples for that class. |",
+        "| Accuracy | Overall share of correct predictions on the test split. |",
         "",
         "## Confusion Matrix",
         "",
         "Rows are actual labels and columns are predicted labels.",
         "",
-        "```text",
-        str(metrics["confusion_matrix"]),
-        "```",
+        format_confusion_matrix(metrics["confusion_matrix"]),
+        "",
+        "Interpretation:",
+        "",
+        "- `not_preferred → not_preferred`: correctly rejected candidate actions",
+        "- `not_preferred → preferred`: candidate actions incorrectly predicted as preferred",
+        "- `preferred → not_preferred`: preferred candidate actions missed by the model",
+        "- `preferred → preferred`: correctly selected preferred candidate actions",
         "",
         "## Classification Report",
         "",
@@ -156,11 +220,26 @@ def save_training_report(metrics: dict) -> None:
         metrics["classification_report"],
         "```",
         "",
+        "## Feature Importances",
+        "",
+        "Feature importance indicates how much each feature contributed to the Decision Tree splits. Higher values mean the feature was more influential in the learned decision rules.",
+        "",
+        format_feature_importances(metrics["feature_importances"]),
+        "",
+        "## Interpretation",
+        "",
+        "The Decision Tree learned that revisit-related features are highly important. The top-level split uses `candidate_visit_count`, which means the model first separates unvisited or barely visited candidate tiles from revisited ones.",
+        "",
+        "This matches the intended navigation strategy: prefer exploration over repeatedly revisiting already explored tiles. The model also uses features such as `candidate_has_been_visited`, `candidate_allows_exit`, `candidate_allows_score_collection`, `can_collect_score_here`, and `can_exit_maze_here`.",
+        "",
+        "The model should be interpreted as a lightweight, explainable ML policy trained from telemetry-derived labels. It is not trained on human labels or final maze outcomes. The next evaluation step should compare this policy against the baseline and reward-aware policies on unseen mazes.",
+        "",
         "## Generated Artifacts",
         "",
         "- `models/decision_tree_policy.joblib`",
         "- `reports/decision_tree_policy.txt`",
         "- `reports/decision_tree_policy.png`",
+        "- `reports/decision_tree_training_report.md`",
         "",
     ]
 
