@@ -2,7 +2,16 @@
 
 Data-driven AI/ML maze navigation agent for the HTI technical challenge.
 
-The goal of this project is to build a bot that can navigate mazes, collect rewards and find the exit. The solution is developed step-by-step according to the challenge structure.
+The goal of this project is to build a bot that can navigate mazes, collect rewards and find the exit. The solution is developed step-by-step according to the challenge structure:
+
+1. build a working baseline bot
+2. collect and analyze telemetry
+3. implement smarter navigation policies
+4. evaluate all policies with consistent metrics
+
+The project contains both an interactive application flow and command-line commands for reproducible execution.
+
+---
 
 ## Current Status
 
@@ -10,9 +19,9 @@ The goal of this project is to build a bot that can navigate mazes, collect rewa
 
 Implemented.
 
-The current implementation contains a working baseline maze bot based on a simple DFS-like exploration strategy.
+The project contains a working baseline maze bot based on a deterministic DFS-like exploration strategy.
 
-DFS (Depth-First Search) is a graph traversal algorithm that explores as far as possible along each branch before backtracking. It uses a stack to keep track of the path, visiting unvisited neighbors and returning to previous nodes when no unvisited neighbors remain.
+DFS, or Depth-First Search, explores as far as possible along each branch before backtracking. The bot keeps track of the path, moves to unvisited destination tiles first and backtracks when no unvisited moves are available.
 
 The baseline bot can:
 
@@ -39,19 +48,15 @@ For `Easy deal`, the bot collected the full potential reward:
 playerScore: 142
 ```
 
-This is intentionally still a baseline implementation. The goal of Step 1 is not to create the smartest possible strategy yet, but to create a reliable reference point for later data collection, analysis and comparison.
+This baseline is intentionally simple. It provides a stable reference point for later telemetry collection, smarter policies and evaluation.
+
+---
 
 ### Step 2 — Data Collection and Analysis
 
 Implemented.
 
-The baseline bot now writes structured telemetry during navigation. Each decision logs all candidate actions, not only the selected action. This makes it possible to analyze what the bot chose compared to the available alternatives.
-
-The baseline bot was observed on:
-
-- `Example Maze`
-- `Gradius Pathways`
-- `Hello Maze`
+The bot writes structured telemetry during navigation. Each decision logs all candidate actions, not only the selected action. This makes it possible to analyze what the bot chose compared with the alternatives that were available at the same decision point.
 
 Telemetry is written to:
 
@@ -70,10 +75,16 @@ reports/telemetry_analysis.md
 Run the analysis with:
 
 ```bash
+python -m src.main analyze-telemetry
+```
+
+or directly:
+
+```bash
 python -m src.analysis.analyze_telemetry
 ```
 
-The analysis currently includes:
+The telemetry analysis includes:
 
 - overall telemetry summary
 - runs by bot policy and maze
@@ -86,15 +97,17 @@ The analysis currently includes:
 - initial feature signals based on simple correlations
 - feature signals by bot policy
 
-This step is exploratory. The goal is to understand the collected data before implementing and evaluating smarter navigation strategies.
+This step is exploratory. The goal is to understand the collected data before and after implementing smarter navigation strategies.
 
-### Step 3 — Smart Bot
+---
+
+### Step 3 — Smart Bot Policies
 
 Implemented.
 
-The project now includes smarter bot implementations based on a policy abstraction.
+The project includes smarter bot implementations based on a policy abstraction.
 
-Instead of hardcoding smart logic directly inside the bot orchestration, navigation decisions are delegated to a separate policy layer. This keeps the solution modular and makes it possible to compare different navigation strategies fairly.
+Instead of hardcoding all navigation logic directly inside the bot orchestration, navigation decisions are delegated to a separate policy layer. This keeps the solution modular and makes it possible to compare different navigation strategies fairly.
 
 Implemented policies:
 
@@ -104,7 +117,7 @@ Implemented policies:
 
 The baseline policy preserves the original deterministic DFS-like behavior.
 
-The reward-aware policy is the first smart strategy. It scores candidate actions using simple, explainable features:
+The reward-aware policy is an explainable heuristic strategy. It scores candidate actions using simple, transparent features:
 
 - whether the destination tile is unvisited
 - immediate reward on the destination tile
@@ -113,7 +126,7 @@ The reward-aware policy is the first smart strategy. It scores candidate actions
 - destination revisit count
 - whether the destination is the start tile
 
-The Decision Tree policy is the first trained ML-based strategy. It is trained from telemetry data using candidate-action features and a weakly supervised target. For each decision point, the candidate action with the highest transparent preference score is marked as the preferred action.
+The Decision Tree policy is a lightweight trained ML strategy. It is trained from telemetry data using candidate-action features and a weakly supervised target. For each decision point, the candidate action with the highest transparent preference score is marked as the preferred action.
 
 The smart bot implementations are:
 
@@ -127,93 +140,165 @@ This makes the smart bot layer:
 - explainable
 - easy to test
 - easy to compare against the baseline
-- extensible for future ML-based policy learning
+- extensible for future policy learning
 - aligned with a data-driven AI engineering workflow
 
-The selected bot can be configured through `.env`:
+---
 
-```env
-BOT_TYPE=baseline
+### Step 4 — Policy Evaluation
+
+Implemented.
+
+The project includes an evaluation workflow that compares all implemented policies on the same maze set.
+
+Evaluated policies:
+
+- `baseline_dfs`
+- `reward_aware`
+- `decision_tree`
+
+Evaluation output is written to:
+
+```text
+reports/evaluation_results.csv
+reports/evaluation_report.md
 ```
 
-or:
+Evaluation telemetry is written separately to:
 
-```env
-BOT_TYPE=smart
+```text
+experiments/evaluation_action_logs.csv
 ```
 
-or:
+The evaluation report is generated deterministically from the evaluation results. It does not use generated natural-language interpretation. Instead, it calculates findings from the metrics.
 
-```env
-BOT_TYPE=decision_tree
+The evaluation includes:
+
+- final score
+- score per step
+- number of logged decision steps
+- average chosen reward
+- forward-exploration reward
+- revisit ratio
+- forward-exploration revisit ratio
+- backtracking ratio
+- first exit-capable tile step
+- first collection point step
+- early reward progress checkpoints
+- exit success rate
+
+This is important because all bots reuse a full-exploration orchestration. On simple mazes, final score can be identical across policies because all policies eventually visit the same reachable reward tiles and exit. In that case, order-sensitive metrics such as early reward progress and first collection step are more informative than final score alone.
+
+Run evaluation with:
+
+```bash
+python -m src.main evaluate
 ```
+
+or directly:
+
+```bash
+python -m src.evaluation.evaluate_bots
+```
+
+---
 
 ## Why a Baseline First?
 
-A baseline is important because it gives us a fair point of comparison.
+A baseline gives a fair reference point.
 
-Before introducing a data-driven or machine learning based strategy, we first need to understand how a simple deterministic bot performs. Later, smarter bots can be compared against this baseline using metrics such as:
+Before introducing a data-driven or machine-learning-based strategy, the project first establishes how a simple deterministic bot performs. Later, smarter policies can be compared against that baseline using consistent metrics such as:
 
 - final score
+- score per step
 - number of steps
-- score collected per step
+- average chosen reward
 - number of revisits
-- percentage of potential reward collected
+- backtracking ratio
 - whether the exit was found
+
+---
 
 ## Why Telemetry?
 
-The assignment is not only about solving mazes, but also about learning from the data collected during navigation.
+The challenge is not only about solving mazes, but also about learning from the data collected during navigation.
 
-For that reason, the bot logs every decision point. It stores both the selected action and the alternative actions that were available at the same moment.
+The telemetry logger records every decision point. It stores both the selected action and the alternative candidate actions that were available at the same moment.
 
-This allows later analysis of questions such as:
+This enables analysis of questions such as:
 
 - Are rewards uniformly distributed?
 - Do certain tile properties correlate with higher rewards?
 - Does the baseline bot miss better alternatives?
 - Which features could be useful for a smarter policy?
 - Can a lightweight ML model learn useful move preferences from telemetry?
+- Do smarter policies find useful rewards earlier than the baseline?
 
-## Why a Policy-Based Smart Bot?
+---
 
-A policy-based design separates the question "how do we choose the next move?" from the rest of the maze-solving flow.
+## Why a Policy-Based Design?
 
-This is useful because the bot orchestration remains stable while different decision strategies can be tested independently.
+A policy-based design separates the question:
+
+```text
+How do we choose the next move?
+```
+
+from the rest of the maze-solving flow.
+
+The bot orchestration remains stable while different decision strategies can be tested independently.
 
 For example:
 
-- `BaselineDfsPolicy` can be used as the reference strategy
-- `RewardAwarePolicy` can be used as the first explainable smart strategy
-- `DecisionTreePolicy` can be used as a lightweight trained ML strategy
-- a future reinforcement learning or model-based policy could be added without rewriting the bot
+- `BaselineDfsPolicy` is the reference strategy
+- `RewardAwarePolicy` is the first explainable smart strategy
+- `DecisionTreePolicy` is the lightweight trained ML strategy
 
-This design supports the AI engineering workflow of comparing strategies, measuring behavior and improving the decision layer incrementally.
+This design supports incremental development, testing and evaluation.
+
+---
 
 ## Why a Decision Tree?
 
-A Decision Tree is a good fit for this challenge because the API exposes structured candidate-action features, not natural language.
+A Decision Tree is a good fit for this challenge because the Maze API exposes structured candidate-action features.
 
-The Decision Tree approach gives us:
+The Decision Tree approach provides:
 
-- an actual trained ML policy
+- a trained ML policy
 - deterministic inference
 - explainable decision rules
 - feature importance
 - a visual tree artifact for discussion
 - a lightweight implementation that avoids overengineering
 
-The goal is not to build a complex black-box model. The goal is to show how telemetry can be converted into a simple supervised learning problem and then used to make navigation decisions.
+The goal is not to build a complex black-box model. The goal is to show how telemetry can be converted into a simple supervised learning problem and then used for navigation decisions.
+
+Decision Tree training intentionally excludes telemetry generated by the Decision Tree policy itself. This prevents the model from training on its own later behavior.
+
+Training data is limited to:
+
+```text
+baseline_dfs
+reward_aware
+```
+
+Excluded from training:
+
+```text
+decision_tree
+```
+
+---
 
 ## Architecture
 
-The current implementation follows a lightweight layered architecture. The main idea is to separate orchestration, domain logic, decision policies, feature engineering, infrastructure concerns, model training and analysis capabilities so the bot can evolve from a simple baseline into a more data-driven AI/ML solution.
+The current implementation follows a lightweight layered architecture. The main idea is to separate application flow, domain logic, policy decisions, feature engineering, infrastructure, analysis, training, evaluation and tests.
 
 ```mermaid
 flowchart TD
     %% Application Layer
     subgraph APP[Application Layer]
-        A[main.py]
+        A[main.py<br/>Interactive CLI and pipeline]
         B[BaselineMazeBot]
         C[SmartMazeBot]
         D[DecisionTreeMazeBot]
@@ -253,6 +338,14 @@ flowchart TD
         V[reports/telemetry_analysis.md]
     end
 
+    %% Evaluation Layer
+    subgraph EVAL[Evaluation Layer]
+        X[evaluate_bots.py]
+        Y[experiments/evaluation_action_logs.csv]
+        Z[reports/evaluation_results.csv]
+        AA[reports/evaluation_report.md]
+    end
+
     %% Quality Layer
     subgraph TESTS[Quality Layer]
         W[tests/]
@@ -264,6 +357,9 @@ flowchart TD
     A --> C
     A --> D
     A --> R
+    A --> U
+    A --> K
+    A --> X
 
     B --> F
     C --> F
@@ -301,6 +397,13 @@ flowchart TD
     U --> S
     U --> V
 
+    X --> B
+    X --> C
+    X --> D
+    X --> Y
+    X --> Z
+    X --> AA
+
     W --> P
     W --> E
     W --> R
@@ -308,72 +411,88 @@ flowchart TD
     W --> H
     W --> I
     W --> J
+    W --> K
+    W --> X
 ```
 
-### Layer Overview
+---
 
-#### Application Layer
+## Layer Overview
 
-The application layer is responsible for orchestrating the run.
+### Application Layer
 
-- `main.py` initializes configuration, the API client, the selected bot and telemetry logging.
-- `BaselineMazeBot` controls the maze-solving flow and coordinates exploration, backtracking, score collection and exit handling.
-- `SmartMazeBot` reuses the same orchestration but injects a smarter reward-aware policy.
-- `DecisionTreeMazeBot` reuses the same orchestration but injects a trained Decision Tree policy.
+The application layer is responsible for orchestration.
 
-This layer should stay thin and mainly focus on orchestration.
+- `main.py` provides both interactive mode and CLI commands.
+- `BaselineMazeBot` controls the shared maze-solving flow.
+- `SmartMazeBot` reuses the same flow and injects `RewardAwarePolicy`.
+- `DecisionTreeMazeBot` reuses the same flow and injects `DecisionTreePolicy`.
 
-#### Domain and Policy Layer
+The application entry point can:
 
-The domain and policy layer contains the maze-related concepts and navigation decision logic.
+- show a guided menu
+- ask for a player name when missing
+- register or switch player
+- list available mazes
+- play a selected maze with a selected bot
+- collect training telemetry
+- analyze telemetry
+- train the Decision Tree
+- evaluate all policies
+- run the full pipeline
 
-- `models.py` defines the domain models:
+---
+
+### Domain and Policy Layer
+
+The domain and policy layer contains maze-related concepts and navigation decision logic.
+
+- `models.py` defines:
   - `MazeState`
   - `MoveAction`
 - `NavigationPolicy` defines the contract for decision policies.
 - `BaselineDfsPolicy` preserves the deterministic baseline behavior.
-- `RewardAwarePolicy` implements the first smarter navigation strategy.
-- `DecisionTreePolicy` implements a trained ML-based navigation strategy.
+- `RewardAwarePolicy` implements the explainable heuristic strategy.
+- `DecisionTreePolicy` implements the trained ML-based strategy.
 
-The reward-aware policy uses an explainable scoring function instead of a black-box model. The Decision Tree policy then turns the telemetry into a lightweight supervised ML model.
+---
 
-#### Feature and Training Layer
+### Feature and Training Layer
 
 The feature and training layer converts telemetry into model-ready data.
 
-- `candidate_action_features.py` defines the shared feature schema used during both training and inference.
+- `candidate_action_features.py` defines the shared feature schema used during training and inference.
 - `train_decision_tree.py` trains a Decision Tree classifier from telemetry.
-- The trained model is written to:
+
+The training script writes:
 
 ```text
 models/decision_tree_policy.joblib
-```
-
-- A text representation of the tree is written to:
-
-```text
 reports/decision_tree_policy.txt
-```
-
-- A visual Decision Tree graph is written to:
-
-```text
 reports/decision_tree_policy.png
-```
-
-- A training summary is written to:
-
-```text
 reports/decision_tree_training_report.md
 ```
 
-The model file is treated as a generated artifact and is not committed by default. The reports and graph can be committed to make the model behavior reviewable.
+The training report includes:
 
-#### Infrastructure Layer
+- telemetry rows before and after filtering
+- training policies used
+- train/test split size
+- accuracy
+- confusion matrix
+- classification report
+- feature importances
+- data-driven findings
+
+The Decision Tree model file is treated as a generated artifact and is not normally committed. The reports and graph can be committed because they make model behavior reviewable.
+
+---
+
+### Infrastructure Layer
 
 The infrastructure layer handles external interactions and persistence.
 
-- `config.py` loads environment variables and constructs the required authorization header.
+- `config.py` loads environment variables and constructs the authorization header.
 - `MazeClient` handles communication with the HTI Maze API:
   - player registration
   - player reset
@@ -387,46 +506,76 @@ The infrastructure layer handles external interactions and persistence.
 
 This separation keeps HTTP details and file I/O out of the navigation logic.
 
-#### Analysis Layer
+---
 
-The analysis layer is responsible for understanding the behavior of the bot.
+### Analysis Layer
 
-- `analyze_telemetry.py` reads the telemetry dataset from:
-  - `experiments/action_logs.csv`
-- it generates an exploratory Markdown report:
-  - `reports/telemetry_analysis.md`
+The analysis layer is responsible for understanding bot behavior.
 
-This layer is used to identify useful signals and support future evaluation between the baseline, reward-aware and Decision Tree policies.
+- `analyze_telemetry.py` reads telemetry from:
 
-#### Quality Layer
+```text
+experiments/action_logs.csv
+```
 
-The quality layer contains unit tests for the project foundation.
+- it generates:
+
+```text
+reports/telemetry_analysis.md
+```
+
+This report helps identify useful signals and compare behavior between policy types.
+
+---
+
+### Evaluation Layer
+
+The evaluation layer compares all implemented policies on the same maze set.
+
+- `evaluate_bots.py` evaluates:
+  - `baseline_dfs`
+  - `reward_aware`
+  - `decision_tree`
+
+It writes:
+
+```text
+experiments/evaluation_action_logs.csv
+reports/evaluation_results.csv
+reports/evaluation_report.md
+```
+
+The evaluation report is generated deterministically from metrics. It does not use manually written result-specific conclusions.
+
+---
+
+### Quality Layer
+
+The quality layer contains unit tests.
 
 Current test coverage includes:
 
 - configuration and authorization header construction
 - API response model parsing
 - direction ordering and opposite-direction mapping
-- telemetry logging behavior
-- baseline policy decision behavior
-- reward-aware policy decision behavior
+- telemetry CSV logging
+- baseline policy behavior
+- reward-aware policy behavior
 - Decision Tree policy behavior
 - candidate-action feature preparation
+- Decision Tree training telemetry filtering
+- Decision Tree report helper behavior
+- evaluation checkpoint metrics
+- evaluation report generation
+- data-driven evaluation findings
 
-This helps keep the implementation stable while the project evolves.
+Run tests with:
 
-### Architectural Intent
+```bash
+pytest -v
+```
 
-This architecture is intentionally designed to support an incremental AI engineering workflow:
-
-1. build a working baseline bot
-2. collect structured telemetry
-3. analyze runtime behavior
-4. introduce an explainable smart policy
-5. train a lightweight ML policy
-6. evaluate improvements against the baseline
-
-By separating application flow, domain logic, policy decisions, feature engineering, infrastructure and analysis, the project remains understandable, testable and easy to extend.
+---
 
 ## Setup
 
@@ -452,11 +601,22 @@ cp .env.example .env
 Fill in the API token in `.env`:
 
 ```env
+# Maze API configuration
 MAZE_BASE_URL=https://maze.kluster.htiprojects.nl
 MAZE_API_TOKEN=<your-api-token>
-PLAYER_NAME=<your-player-name>
+
+# Player configuration
+# Optional for interactive mode. If omitted or left empty, the app will ask for a player name.
+PLAYER_NAME=
+
+# Default single-run configuration
 DEFAULT_MAZE_NAME=Easy deal
+
+# Supported values: baseline, smart, decision_tree
 BOT_TYPE=baseline
+
+# Set to true during local development if the player can remain inside a maze
+# after an interrupted run.
 RESET_PLAYER_ON_START=false
 ```
 
@@ -466,80 +626,204 @@ The code automatically sends the token using the required authorization header f
 Authorization: HTI Thanks You <token>
 ```
 
-## Running the Bot
+---
 
-Run the selected bot:
+## Running the Application
 
-```bash
-python -m src.main
-```
+### Interactive Mode
 
-You can change the selected maze in `.env`:
-
-```env
-DEFAULT_MAZE_NAME=Hello Maze
-```
-
-You can select the bot type in `.env`:
-
-```env
-BOT_TYPE=baseline
-```
-
-or:
-
-```env
-BOT_TYPE=smart
-```
-
-or:
-
-```env
-BOT_TYPE=decision_tree
-```
-
-During development, the player can remain inside a maze after an interrupted run. The runner can reset the player state when needed to make local development and comparison easier:
-
-```env
-RESET_PLAYER_ON_START=true
-```
-
-## Running the Reward-Aware Smart Bot
-
-To run the reward-aware smart bot locally, update `.env`:
-
-```env
-DEFAULT_MAZE_NAME=Example Maze
-BOT_TYPE=smart
-RESET_PLAYER_ON_START=true
-```
-
-Then run:
+Run the application without arguments:
 
 ```bash
 python -m src.main
 ```
 
-Generate the updated telemetry analysis:
+Interactive mode shows:
 
-```bash
-python -m src.analysis.analyze_telemetry
+- current known player name
+- register or switch player
+- available mazes
+- play new game
+- collect training telemetry
+- analyze telemetry
+- train Decision Tree
+- evaluate all policies
+- run the full pipeline
+- report paths
+
+Example menu:
+
+```text
+Main menu
+
+Current player: Adaptive Maze Player
+
+1. Play new game
+2. Run entire pipeline with default settings
+3. Register or switch player
+4. List available mazes
+5. Collect training telemetry
+6. Analyze telemetry
+7. Train Decision Tree
+8. Evaluate all policies
+9. Run full pipeline with custom training mazes
+10. Show guide
+11. Show generated report paths
+0. Exit
 ```
 
-The telemetry should include rows where:
+---
+
+### CLI Mode
+
+List available mazes:
+
+```bash
+python -m src.main list-mazes
+```
+
+Run one bot on one maze:
+
+```bash
+python -m src.main run-bot \
+  --bot-type baseline \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+Collect training telemetry from baseline and reward-aware bots:
+
+```bash
+python -m src.main collect-training-data --fresh-telemetry
+```
+
+Analyze telemetry:
+
+```bash
+python -m src.main analyze-telemetry
+```
+
+Train the Decision Tree policy:
+
+```bash
+python -m src.main train-decision-tree
+```
+
+Evaluate all policies:
+
+```bash
+python -m src.main evaluate
+```
+
+Run the full default pipeline:
+
+```bash
+python -m src.main pipeline --fresh-telemetry
+```
+
+---
+
+## Recommended Workflow
+
+For a clean end-to-end run:
+
+```bash
+python -m src.main pipeline --fresh-telemetry
+```
+
+This performs:
+
+1. collect training telemetry from `baseline` and `smart`
+2. generate telemetry analysis
+3. train the Decision Tree policy
+4. evaluate all policies
+5. generate reports
+
+The default training mazes are:
+
+```text
+Example Maze
+Gradius Pathways
+Hello Maze
+```
+
+The evaluation workflow includes seen and unseen mazes.
+
+---
+
+## Running Individual Bots
+
+### Baseline Bot
+
+```bash
+python -m src.main run-bot \
+  --bot-type baseline \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+The telemetry should contain:
+
+```text
+bot_name: baseline_dfs
+```
+
+---
+
+### Reward-Aware Smart Bot
+
+```bash
+python -m src.main run-bot \
+  --bot-type smart \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+The telemetry should contain:
 
 ```text
 bot_name: reward_aware
 ```
 
-## Training the Decision Tree Bot
+---
 
-Before running the Decision Tree bot, collect telemetry from baseline and reward-aware runs.
+### Decision Tree Bot
 
-Then train the model:
+Train the model first:
 
 ```bash
-python -m src.training.train_decision_tree
+python -m src.main train-decision-tree
+```
+
+Then run:
+
+```bash
+python -m src.main run-bot \
+  --bot-type decision_tree \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+The telemetry should contain:
+
+```text
+bot_name: decision_tree
+```
+
+---
+
+## Training the Decision Tree Policy
+
+Before training, collect telemetry from baseline and reward-aware policies:
+
+```bash
+python -m src.main collect-training-data --fresh-telemetry
+```
+
+Then train:
+
+```bash
+python -m src.main train-decision-tree
 ```
 
 This generates:
@@ -551,90 +835,75 @@ reports/decision_tree_policy.png
 reports/decision_tree_training_report.md
 ```
 
-The visual tree can be opened locally:
+Open the Decision Tree graph locally:
 
 ```bash
 open reports/decision_tree_policy.png
 ```
 
-The Decision Tree graph is useful because it shows which candidate-action features the model used to make decisions.
+The training script filters telemetry before training.
 
-## Running the Decision Tree Bot
-
-After training the model, update `.env`:
-
-```env
-DEFAULT_MAZE_NAME=Example Maze
-BOT_TYPE=decision_tree
-RESET_PLAYER_ON_START=true
-```
-
-Then run:
-
-```bash
-python -m src.main
-```
-
-Generate the updated telemetry analysis:
-
-```bash
-python -m src.analysis.analyze_telemetry
-```
-
-The telemetry should include rows where:
+Used for training:
 
 ```text
-bot_name: decision_tree
+baseline_dfs
+reward_aware
 ```
 
-## Generating Telemetry
-
-When the bot runs, telemetry is written to:
+Excluded from training:
 
 ```text
-experiments/action_logs.csv
+decision_tree
 ```
 
-Example command:
+This prevents training the Decision Tree on its own generated behavior.
+
+---
+
+## Running the Evaluation
+
+Run:
 
 ```bash
-python -m src.main
+python -m src.main evaluate
 ```
 
-Inspect the first rows:
-
-```bash
-head -n 5 experiments/action_logs.csv
-```
-
-Inspect the latest rows:
-
-```bash
-tail -n 10 experiments/action_logs.csv
-```
-
-## Running the Analysis
-
-Generate the telemetry analysis report:
-
-```bash
-python -m src.analysis.analyze_telemetry
-```
-
-The report is written to:
+This generates:
 
 ```text
-reports/telemetry_analysis.md
+experiments/evaluation_action_logs.csv
+reports/evaluation_results.csv
+reports/evaluation_report.md
 ```
+
+The evaluation report includes deterministic data-driven findings such as:
+
+- final score finding
+- best score per step
+- early reward progress leaders
+- first collection step leaders
+- first exit-capable tile step leaders
+- backtrack ratio leaders
+- exit success rate leaders
+
+The report does not contain manually hardcoded run-specific conclusions.
+
+---
 
 ## Generated Artifacts
 
-The project produces several generated artifacts during local runs.
+The project produces several generated artifacts.
 
 Runtime telemetry:
 
 ```text
 experiments/action_logs.csv
+```
+
+Evaluation telemetry:
+
+```text
+experiments/evaluation_action_logs.csv
 ```
 
 Telemetry analysis:
@@ -657,98 +926,92 @@ reports/decision_tree_policy.png
 reports/decision_tree_training_report.md
 ```
 
-The runtime telemetry CSV and trained model file are generated artifacts and should not normally be committed. The Markdown reports and Decision Tree graph can be committed because they make the analysis and model behavior reviewable.
+Evaluation artifacts:
+
+```text
+reports/evaluation_results.csv
+reports/evaluation_report.md
+```
+
+Runtime telemetry CSV files and trained model files are generated artifacts and should not normally be committed.
+
+The Markdown reports and Decision Tree graph can be committed because they make the analysis, evaluation and model behavior reviewable.
+
+---
 
 ## Unit Tests
 
-The project includes unit tests for the current foundation.
-
-The tests cover:
-
-- authorization header formatting
-- parsing API move actions into domain models
-- parsing maze state responses
-- stable baseline direction ordering
-- opposite direction mapping
-- telemetry CSV logging
-- baseline DFS policy behavior
-- reward-aware policy behavior
-- Decision Tree policy behavior
-- candidate-action feature preparation
-
-Run tests with:
+Run all tests:
 
 ```bash
 pytest -v
 ```
 
+Run specific test groups:
+
+```bash
+pytest -v tests/test_decision_tree_training.py
+pytest -v tests/test_evaluation_report.py
+```
+
+The tests cover:
+
+- configuration loading
+- authorization header formatting
+- API response model parsing
+- telemetry logging
+- policy behavior
+- feature preparation
+- Decision Tree inference
+- training telemetry filtering
+- training report helpers
+- evaluation metrics
+- evaluation report generation
+
+---
+
 ## Current Limitations
 
-This project is currently at Step 3.
+The current solution is intentionally lightweight.
 
-The current implementation does not yet:
+Known limitations:
 
-- formally compare baseline, reward-aware and Decision Tree bot metrics
-- use MLflow for experiment tracking
-- reconstruct a complete graph-level view of the maze
-- precisely classify destination tiles as dead ends, corridors or junctions
-- train a reinforcement learning policy
+- The shared bot orchestration performs full exploration before exiting. This can make final score identical across policies on simple mazes.
+- The current evaluation therefore relies on order-sensitive metrics as well as final score.
+- The project does not reconstruct a complete graph-level representation of the maze.
+- The branching-factor analysis is approximate. It uses the number of available actions from the current tile, while the immediate reward belongs to the candidate destination tile.
+- The project does not precisely classify destination tiles as dead ends, corridors or junctions.
+- The Decision Tree target is weakly supervised from a transparent preference score, not from human labels or final maze outcomes.
+- The project does not train a reinforcement learning policy.
+- The project does not use LLMs or other generative AI models for interpretation or evaluation. The evaluation report is generated deterministically from metrics.
+- The project does not use a large-scale ML model. The Decision Tree is intentionally lightweight and explainable.
 
-The current Decision Tree model is trained using a weakly supervised target derived from a transparent preference score. This is intentional: the challenge is small, the API state is structured, and an explainable model is more useful here than a complex black-box model.
+These limitations are deliberate trade-offs for a 2–4 hour technical challenge. The implementation focuses on correctness, explainability, telemetry, model simplicity and reproducible evaluation.
 
-The current branching-factor analysis is an approximation. It uses the number of available actions from the current tile, while the immediate reward belongs to the candidate destination tile. A more precise tile-type analysis will require graph reconstruction in a later iteration.
+---
 
-## Next Steps
+## Possible Future Improvements
 
-### Step 4 — Evaluation
+Future improvements could include:
 
-The next step is to compare all implemented bot policies in a data-driven way:
+- reconstructing a graph-level map of each maze
+- deriving exact tile-level features such as dead end, corridor and junction
+- adding budgeted evaluation where the bot must maximize reward within a fixed step limit
+- training from final run outcomes instead of weak preference labels
+- comparing policy behavior on larger and more branching mazes
+- adding more robust experiment configuration files
 
-- `baseline_dfs`
-- `reward_aware`
-- `decision_tree`
-
-Potential evaluation metrics:
-
-- final score
-- score per step
-- number of steps
-- percentage of potential reward collected
-- revisit ratio
-- whether the exit was found
-- number of API calls
-- average chosen reward
-- backtracking ratio
-
-The evaluation should run all strategies on the same maze set and compare their behavior using consistent metrics.
-
-### Lightweight MLOps
-
-After the evaluation workflow is implemented, MLflow can be added as a lightweight MLOps layer.
-
-Potential MLflow tracking:
-
-- bot type
-- policy name
-- maze name
-- run parameters
-- final score
-- steps
-- score per step
-- revisit ratio
-- generated telemetry report
-- Decision Tree model artifacts
-- policy artifacts
+---
 
 ## Design Philosophy
 
 The implementation follows a lightweight AI engineering approach:
 
 1. build a working baseline
-2. make the behavior measurable
-3. analyze the collected data
-4. improve the navigation strategy with an explainable heuristic policy
+2. make behavior measurable
+3. analyze collected telemetry
+4. introduce an explainable smart policy
 5. train a lightweight ML policy
-6. evaluate improvements against the baseline
+6. evaluate all policies with consistent metrics
 
 The focus is not only on solving the maze, but also on explaining the reasoning, trade-offs and metrics behind the chosen approach.
