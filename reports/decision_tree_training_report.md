@@ -8,10 +8,13 @@ The model is trained on candidate-action features. The target label is weakly su
 
 | Metric | Value | Explanation |
 |:-------|------:|:------------|
-| Training rows | `454` | Number of candidate-action rows used after feature preparation. |
-| Train split rows | `317` | Rows used to fit the Decision Tree model. |
-| Test split rows | `137` | Rows held out to validate the model. |
-| Accuracy | `0.861` | Share of test rows where the model predicted the correct preferred/not-preferred label. |
+| Telemetry rows before filter | `471` | Total telemetry rows available before training data filtering. |
+| Telemetry rows after filter | `313` | Rows kept for training after selecting the configured training policies. |
+| Training policies | `baseline_dfs, reward_aware` | Bot policies used as training data. |
+| Training rows | `300` | Number of candidate-action rows used after feature preparation. |
+| Train split rows | `210` | Rows used to fit the Decision Tree model. |
+| Test split rows | `90` | Rows held out to validate the model. |
+| Accuracy | `0.911` | Share of test rows where the model predicted the correct preferred/not-preferred label. |
 
 ## Metric Definitions
 
@@ -29,56 +32,53 @@ Rows are actual labels and columns are predicted labels.
 
 | Actual \ Predicted | not_preferred | preferred |
 |:-------------------|--------------:|----------:|
-| not_preferred | 52 | 10 |
-| preferred | 9 | 66 |
-
-Interpretation:
-
-- `not_preferred → not_preferred`: correctly rejected candidate actions
-- `not_preferred → preferred`: candidate actions incorrectly predicted as preferred
-- `preferred → not_preferred`: preferred candidate actions missed by the model
-- `preferred → preferred`: correctly selected preferred candidate actions
+| not_preferred | 36 | 5 |
+| preferred | 3 | 46 |
 
 ## Classification Report
 
 ```text
                precision    recall  f1-score   support
 
-not_preferred       0.85      0.84      0.85        62
-    preferred       0.87      0.88      0.87        75
+not_preferred       0.92      0.88      0.90        41
+    preferred       0.90      0.94      0.92        49
 
-     accuracy                           0.86       137
-    macro avg       0.86      0.86      0.86       137
- weighted avg       0.86      0.86      0.86       137
+     accuracy                           0.91        90
+    macro avg       0.91      0.91      0.91        90
+ weighted avg       0.91      0.91      0.91        90
 
 ```
 
 ## Feature Importances
 
-Feature importance indicates how much each feature contributed to the Decision Tree splits. Higher values mean the feature was more influential in the learned decision rules.
+Feature importance indicates how much each feature contributed to the Decision Tree splits.
 
 | feature                           |   importance |
 |:----------------------------------|-------------:|
-| candidate_visit_count             |        0.858 |
-| candidate_has_been_visited        |        0.082 |
-| candidate_allows_score_collection |        0.039 |
-| can_collect_score_here            |        0.01  |
-| path_depth                        |        0.009 |
-| can_exit_maze_here                |        0.002 |
-| candidate_allows_exit             |        0     |
+| candidate_visit_count             |        0.802 |
+| candidate_has_been_visited        |        0.073 |
+| candidate_allows_score_collection |        0.065 |
+| can_collect_score_here            |        0.034 |
+| candidate_allows_exit             |        0.012 |
+| path_depth                        |        0.01  |
+| can_exit_maze_here                |        0.003 |
 | current_score_in_bag              |        0     |
 | current_score_in_hand             |        0     |
 | available_action_count            |        0     |
 | candidate_reward_on_destination   |        0     |
 | candidate_is_start                |        0     |
 
-## Interpretation
+## Data-Driven Findings
 
-The Decision Tree learned that revisit-related features are highly important. The top-level split uses `candidate_visit_count`, which means the model first separates unvisited or barely visited candidate tiles from revisited ones.
-
-This matches the intended navigation strategy: prefer exploration over repeatedly revisiting already explored tiles. The model also uses features such as `candidate_has_been_visited`, `candidate_allows_exit`, `candidate_allows_score_collection`, `can_collect_score_here`, and `can_exit_maze_here`.
-
-The model should be interpreted as a lightweight, explainable ML policy trained from telemetry-derived labels. It is not trained on human labels or final maze outcomes. The next evaluation step should compare this policy against the baseline and reward-aware policies on unseen mazes.
+- Training telemetry was filtered from `471` rows to `313` rows; `158` rows were excluded.
+- The model was trained using telemetry from: `baseline_dfs, reward_aware`.
+- The following observed policies were excluded from training: `decision_tree`.
+- Held-out test accuracy was `0.911`.
+- The model predicted `82` out of `90` test rows correctly, with `5` false positives and `3` false negatives.
+- The highest feature importance belongs to `candidate_visit_count` with importance `0.802`.
+- `7` out of `12` features have non-zero importance in this trained tree.
+- The root split feature of the trained tree is `candidate_visit_count`.
+- Feature importances describe this fitted weakly supervised model only; they should not be interpreted as causal proof of final maze performance.
 
 ## Generated Artifacts
 

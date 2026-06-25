@@ -1,16 +1,13 @@
 |--- candidate_visit_count <= 0.50
 |   |--- candidate_has_been_visited <= 0.50
-|   |   |--- candidate_allows_exit <= 0.50
-|   |   |   |--- class: 1
-|   |   |--- candidate_allows_exit >  0.50
-|   |   |   |--- class: 1
+|   |   |--- class: 1
 |   |--- candidate_has_been_visited >  0.50
-|   |   |--- candidate_allows_score_collection <= 0.50
+|   |   |--- candidate_allows_exit <= 0.50
 |   |   |   |--- path_depth <= 0.50
 |   |   |   |   |--- class: 1
 |   |   |   |--- path_depth >  0.50
 |   |   |   |   |--- class: 1
-|   |   |--- candidate_allows_score_collection >  0.50
+|   |   |--- candidate_allows_exit >  0.50
 |   |   |   |--- class: 1
 |--- candidate_visit_count >  0.50
 |   |--- candidate_allows_score_collection <= 0.50
