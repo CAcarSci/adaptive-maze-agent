@@ -22,7 +22,7 @@ The application can be used in two ways:
 
 The current implementation follows a lightweight layered architecture. The main idea is to separate application flow, domain logic, policy decisions, feature engineering, infrastructure, analysis, training, evaluation, AI summarization, tracking and tests.
 
-![High-Level Architecture](architecture_diagrams/high-level-architecture.drawio.png)
+![High-Level Architecture](architecture_diagrams/simplified-architecture.drawio.png)
 
 ---
 
