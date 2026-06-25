@@ -9,7 +9,7 @@ The goal of this project is to build a bot that can navigate mazes, collect rewa
 3. implement smarter navigation policies
 4. evaluate all policies with consistent metrics
 
-The project also includes lightweight local MLflow tracking for training and evaluation metadata, and a local Llama-based evaluation summary.
+The project also includes lightweight local MLflow tracking for training and evaluation metadata, and an AI evaluation summary powered by a local Llama model.
 
 The application can be used in two ways:
 
@@ -174,13 +174,13 @@ The AI summary layer adds a readable qualitative interpretation on top of the de
 reports/evaluation_ai_summary.md
 ```
 
-- It also appends the summary to:
+- It also inserts the summary into:
 
 ```text
 reports/evaluation_report.md
 ```
 
-The measured metrics remain the source of truth.
+The AI summary is inserted before the `Report Scope` section. The measured metrics remain the source of truth.
 
 ---
 
@@ -234,7 +234,7 @@ Current test coverage includes:
 - evaluation checkpoint metrics
 - evaluation report generation
 - data-driven evaluation findings
-- local Llama summary helper behavior
+- AI evaluation summary helper behavior
 - MLflow tracking helper behavior
 
 Run tests with:
@@ -268,7 +268,7 @@ Ollama is not installed through `requirements.txt`. Ollama is a local runtime se
 
 ## Install Ollama CLI
 
-The local Llama summary uses Ollama. Install Ollama for your operating system before running evaluation.
+The AI evaluation summary uses a local Llama model through Ollama. Install Ollama for your operating system before running evaluation.
 
 ### Windows
 
@@ -284,7 +284,7 @@ Verify installation:
 ollama --version
 ```
 
-Start and verify the Ollama service:
+If Ollama is not already running, start it in a separate PowerShell window:
 
 ```powershell
 ollama serve
@@ -292,13 +292,13 @@ ollama serve
 
 ### macOS
 
-Download and install Ollama for macOS from the official Ollama download page, then open the Ollama application once. The app verifies that the `ollama` CLI is available in your PATH and can create the CLI link when needed.
-
-Alternatively, install Ollama through Homebrew:
+Install Ollama using the official install script:
 
 ```bash
-brew install ollama
+curl -fsSL https://ollama.com/install.sh | sh
 ```
+
+Alternatively, download and install Ollama for macOS from the official Ollama download page, then open the Ollama application once.
 
 Verify installation:
 
@@ -306,7 +306,7 @@ Verify installation:
 ollama --version
 ```
 
-Start and verify the Ollama service:
+If Ollama is not already running, start it in a separate terminal:
 
 ```bash
 ollama serve
@@ -326,7 +326,7 @@ Verify installation:
 ollama --version
 ```
 
-Start and verify the Ollama service:
+If Ollama is not already running, start it in a separate terminal:
 
 ```bash
 ollama serve
@@ -481,7 +481,7 @@ Train the Decision Tree policy:
 python -m src.main train-decision-tree
 ```
 
-Evaluate all policies and generate the local Llama summary:
+Evaluate all policies and generate the AI summary:
 
 ```bash
 python -m src.main evaluate
@@ -670,7 +670,7 @@ The evaluation report includes deterministic data-driven findings such as:
 - backtrack ratio leaders
 - exit success rate leaders
 
-The AI summary is appended as a separate section at the end of the report.
+The AI summary is inserted as a separate section before the `Report Scope` section.
 
 When MLflow is enabled, evaluation also logs:
 
@@ -708,13 +708,13 @@ Output:
 reports/evaluation_ai_summary.md
 ```
 
-The same summary is appended to:
+The same summary is inserted into:
 
 ```text
 reports/evaluation_report.md
 ```
 
-Disable the Llama summary if needed:
+Disable the AI summary if needed:
 
 ```env
 ENABLE_LLAMA_EVALUATION=false
@@ -855,7 +855,7 @@ The tests cover:
 - evaluation metrics
 - evaluation report generation
 - data-driven evaluation findings
-- local Llama summary helper behavior
+- AI evaluation summary helper behavior
 - MLflow tracking helper behavior
 
 ---
@@ -1062,7 +1062,7 @@ The summarizer reads the structured evaluation results from:
 reports/evaluation_results.csv
 ```
 
-and generates a short two-paragraph qualitative summary. The deterministic metrics remain the source of truth; the Llama summary is used only as a readable interpretation layer on top of the measured results.
+and generates a short two-paragraph qualitative summary. The deterministic metrics remain the source of truth; the AI summary is used only as a readable interpretation layer on top of the measured results.
 
 The generated summary is written to:
 
@@ -1070,7 +1070,7 @@ The generated summary is written to:
 reports/evaluation_ai_summary.md
 ```
 
-and appended to:
+and inserted into:
 
 ```text
 reports/evaluation_report.md
@@ -1252,8 +1252,8 @@ Known limitations:
 - The project does not precisely classify destination tiles as dead ends, corridors or junctions.
 - The Decision Tree target is weakly supervised from a transparent preference score, not from human labels or final maze outcomes.
 - The project does not train a reinforcement learning policy.
-- The local Llama summary is a reporting aid and not part of the scoring logic.
+- The AI summary is a reporting aid and not part of the scoring logic.
 - The project does not use a large-scale ML model. The Decision Tree is intentionally lightweight and explainable.
 - MLflow tracking is intentionally local and lightweight. It is not used as a deployment, model registry or production MLOps system.
 
-These limitations are deliberate trade-offs for a 4–8 hour technical challenge. The implementation focuses on correctness, explainability, telemetry, model simplicity, reproducible evaluation, local LLM summarization and lightweight experiment tracking.
+These limitations are deliberate trade-offs for a time-boxed technical challenge. The implementation focuses on correctness, explainability, telemetry, model simplicity, reproducible evaluation, local LLM summarization and lightweight experiment tracking.
