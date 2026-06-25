@@ -9,7 +9,12 @@ The goal of this project is to build a bot that can navigate mazes, collect rewa
 3. implement smarter navigation policies
 4. evaluate all policies with consistent metrics
 
-The project contains both an interactive application flow and command-line commands for reproducible execution.
+The project also includes optional lightweight MLflow tracking for local training and evaluation metadata.
+
+The application can be used in two ways:
+
+- interactive mode for a guided demo flow
+- CLI mode for reproducible commands and automation
 
 ---
 
@@ -203,6 +208,59 @@ python -m src.evaluation.evaluate_bots
 
 ---
 
+### Supplementary — Lightweight MLflow Tracking
+
+Implemented.
+
+The project includes optional lightweight MLflow tracking.
+
+MLflow is used only to track training and evaluation metadata. It does not change the bot logic, does not replace the Markdown reports and does not introduce a deployment or model registry workflow.
+
+Tracked training data includes:
+
+- Decision Tree parameters
+- telemetry rows before and after filtering
+- training row counts
+- train/test split size
+- accuracy
+- feature importances
+- generated Decision Tree artifacts
+
+Tracked evaluation data includes:
+
+- evaluated policies
+- evaluated mazes
+- average score by policy
+- score per step by policy
+- exit success rate
+- generated evaluation artifacts
+
+MLflow tracking is configured through `.env`:
+
+```env
+ENABLE_MLFLOW=true
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+MLFLOW_EXPERIMENT_NAME=adaptive-maze-agent
+```
+
+Run MLflow UI locally with:
+
+```bash
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+Then open the local MLflow UI in the browser.
+
+MLflow tracking is optional. If MLflow cannot be configured, the main training and evaluation pipeline continues and prints a warning instead of failing.
+
+Disable MLflow tracking with:
+
+```env
+ENABLE_MLFLOW=false
+```
+
+---
+
 ## Why a Baseline First?
 
 A baseline gives a fair reference point.
@@ -292,7 +350,7 @@ decision_tree
 
 ## Architecture
 
-The current implementation follows a lightweight layered architecture. The main idea is to separate application flow, domain logic, policy decisions, feature engineering, infrastructure, analysis, training, evaluation and tests.
+The current implementation follows a lightweight layered architecture. The main idea is to separate application flow, domain logic, policy decisions, feature engineering, infrastructure, analysis, training, evaluation, tracking and tests.
 
 ```mermaid
 flowchart TD
@@ -346,6 +404,13 @@ flowchart TD
         AA[reports/evaluation_report.md]
     end
 
+    %% Tracking Layer
+    subgraph TRACKING[Tracking Layer]
+        AB[mlflow_tracker.py]
+        AC[mlflow.db]
+        AD[local MLflow artifacts]
+    end
+
     %% Quality Layer
     subgraph TESTS[Quality Layer]
         W[tests/]
@@ -390,6 +455,7 @@ flowchart TD
     K --> M
     K --> N
     K --> O
+    K --> AB
 
     Q --> T
     R --> S
@@ -403,6 +469,10 @@ flowchart TD
     X --> Y
     X --> Z
     X --> AA
+    X --> AB
+
+    AB --> AC
+    AB --> AD
 
     W --> P
     W --> E
@@ -413,6 +483,7 @@ flowchart TD
     W --> J
     W --> K
     W --> X
+    W --> AB
 ```
 
 ---
@@ -549,6 +620,37 @@ The evaluation report is generated deterministically from metrics. It does not u
 
 ---
 
+### Tracking Layer
+
+The tracking layer provides optional lightweight MLflow tracking.
+
+- `mlflow_tracker.py` wraps MLflow usage so training and evaluation can log metadata, metrics and artifacts without coupling the rest of the application to MLflow.
+- MLflow can be disabled through `.env`:
+
+```env
+ENABLE_MLFLOW=false
+```
+
+Local MLflow tracking uses a SQLite backend:
+
+```env
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+```
+
+Local MLflow output can include:
+
+```text
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns/
+mlartifacts/
+```
+
+These generated files and directories are ignored by Git.
+
+---
+
 ### Quality Layer
 
 The quality layer contains unit tests.
@@ -568,6 +670,7 @@ Current test coverage includes:
 - evaluation checkpoint metrics
 - evaluation report generation
 - data-driven evaluation findings
+- MLflow tracking helper behavior
 
 Run tests with:
 
@@ -591,6 +694,8 @@ Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
+
+This also installs MLflow, which is used only for optional local experiment tracking.
 
 Create a local `.env` file:
 
@@ -618,6 +723,11 @@ BOT_TYPE=baseline
 # Set to true during local development if the player can remain inside a maze
 # after an interrupted run.
 RESET_PLAYER_ON_START=false
+
+# Lightweight MLflow tracking, optional and local by default. Set to true to enable MLflow tracking.
+ENABLE_MLFLOW=true
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+MLFLOW_EXPERIMENT_NAME=adaptive-maze-agent
 ```
 
 The code automatically sends the token using the required authorization header format:
@@ -737,7 +847,8 @@ This performs:
 2. generate telemetry analysis
 3. train the Decision Tree policy
 4. evaluate all policies
-5. generate reports
+5. generate Markdown reports
+6. log training and evaluation metadata to MLflow when enabled
 
 The default training mazes are:
 
@@ -858,6 +969,15 @@ decision_tree
 
 This prevents training the Decision Tree on its own generated behavior.
 
+When MLflow is enabled, training also logs:
+
+- model parameters
+- training row counts
+- train/test split size
+- accuracy
+- feature importances
+- generated training artifacts
+
 ---
 
 ## Running the Evaluation
@@ -887,6 +1007,58 @@ The evaluation report includes deterministic data-driven findings such as:
 - exit success rate leaders
 
 The report does not contain manually hardcoded run-specific conclusions.
+
+When MLflow is enabled, evaluation also logs:
+
+- evaluated policies
+- evaluated mazes
+- average score by policy
+- score per step by policy
+- exit success rate
+- generated evaluation artifacts
+
+---
+
+## Lightweight MLflow Tracking
+
+MLflow tracking is optional and local by default.
+
+It is configured in `.env`:
+
+```env
+ENABLE_MLFLOW=true
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+MLFLOW_EXPERIMENT_NAME=adaptive-maze-agent
+```
+
+Disable tracking:
+
+```env
+ENABLE_MLFLOW=false
+```
+
+Run training and evaluation:
+
+```bash
+python -m src.main train-decision-tree
+python -m src.main evaluate
+```
+
+or run the full pipeline:
+
+```bash
+python -m src.main pipeline --fresh-telemetry
+```
+
+Start the local MLflow UI:
+
+```bash
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+Then open the local MLflow UI in the browser.
+
+MLflow is used only for lightweight local tracking. The Markdown reports remain the main reviewable output of the project.
 
 ---
 
@@ -933,7 +1105,17 @@ reports/evaluation_results.csv
 reports/evaluation_report.md
 ```
 
-Runtime telemetry CSV files and trained model files are generated artifacts and should not normally be committed.
+MLflow local tracking database and artifacts:
+
+```text
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns/
+mlartifacts/
+```
+
+Runtime telemetry CSV files, local MLflow files and trained model files are generated artifacts and should not normally be committed.
 
 The Markdown reports and Decision Tree graph can be committed because they make the analysis, evaluation and model behavior reviewable.
 
@@ -967,6 +1149,8 @@ The tests cover:
 - training report helpers
 - evaluation metrics
 - evaluation report generation
+- data-driven evaluation findings
+- MLflow tracking helper behavior
 
 ---
 
@@ -985,8 +1169,9 @@ Known limitations:
 - The project does not train a reinforcement learning policy.
 - The project does not use LLMs or other generative AI models for interpretation or evaluation. The evaluation report is generated deterministically from metrics.
 - The project does not use a large-scale ML model. The Decision Tree is intentionally lightweight and explainable.
+- MLflow tracking is intentionally local and lightweight. It is not used as a deployment, model registry or production MLOps system.
 
-These limitations are deliberate trade-offs for a 2–4 hour technical challenge. The implementation focuses on correctness, explainability, telemetry, model simplicity and reproducible evaluation.
+These limitations are deliberate trade-offs for a 4–8å hour technical challenge. The implementation focuses on correctness, explainability, telemetry, model simplicity, reproducible evaluation and lightweight experiment tracking.
 
 ---
 
@@ -1013,5 +1198,6 @@ The implementation follows a lightweight AI engineering approach:
 4. introduce an explainable smart policy
 5. train a lightweight ML policy
 6. evaluate all policies with consistent metrics
+7. track training and evaluation metadata locally
 
 The focus is not only on solving the maze, but also on explaining the reasoning, trade-offs and metrics behind the chosen approach.

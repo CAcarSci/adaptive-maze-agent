@@ -10,6 +10,13 @@ from src.bots.smart_bot import SmartMazeBot
 from src.config import load_settings
 from src.data.telemetry_logger import TelemetryLogger
 from src.maze_client import MazeApiError, MazeClient
+from src.tracking.mlflow_tracker import (
+    log_artifacts,
+    log_metrics,
+    log_params,
+    mlflow_run,
+    sanitize_mlflow_key,
+)
 
 
 @dataclass(frozen=True)
@@ -783,6 +790,99 @@ def write_evaluation_report(results_df: pd.DataFrame) -> None:
 
     REPORT_OUTPUT_PATH.write_text("\n".join(lines), encoding="utf-8")
 
+def log_evaluation_to_mlflow(results_df: pd.DataFrame) -> None:
+    if results_df.empty:
+        return
+
+    with mlflow_run(
+        run_name="bot-policy-evaluation",
+        tags={
+            "stage": "evaluation",
+            "evaluation_type": "policy_comparison",
+        },
+    ) as mlflow:
+        if mlflow is None:
+            return
+
+        evaluated_policies = sorted(
+            results_df["bot_name"].dropna().unique().tolist()
+        )
+        evaluated_mazes = sorted(
+            results_df["maze_name"].dropna().unique().tolist()
+        )
+        evaluated_maze_groups = sorted(
+            results_df["maze_group"].dropna().unique().tolist()
+        )
+
+        log_params(
+            mlflow=mlflow,
+            params={
+                "evaluated_policies": ", ".join(evaluated_policies),
+                "evaluated_mazes": ", ".join(evaluated_mazes),
+                "evaluated_maze_groups": ", ".join(evaluated_maze_groups),
+                "run_count": len(results_df),
+                "policy_count": len(evaluated_policies),
+                "maze_count": len(evaluated_mazes),
+            },
+        )
+
+        log_metrics(
+            mlflow=mlflow,
+            metrics={
+                "total_runs": len(results_df),
+                "unique_policies": len(evaluated_policies),
+                "unique_mazes": len(evaluated_mazes),
+                "overall_avg_score": results_df["final_score_delta"].mean(),
+                "overall_avg_score_per_step": results_df["score_per_step"].mean(),
+                "overall_exit_success_rate": results_df["exit_found"].mean(),
+            },
+        )
+
+        summary_by_bot = (
+            results_df.groupby("bot_name", dropna=False)
+            .agg(
+                avg_score=("final_score_delta", "mean"),
+                total_score=("final_score_delta", "sum"),
+                avg_steps=("steps_logged", "mean"),
+                avg_score_per_step=("score_per_step", "mean"),
+                avg_explore_reward=("explore_avg_chosen_reward", "mean"),
+                avg_backtrack_ratio=("backtrack_ratio", "mean"),
+                avg_first_exit_step=("first_exit_step", "mean"),
+                avg_first_collection_step=("first_collection_step", "mean"),
+                exit_success_rate=("exit_found", "mean"),
+            )
+            .reset_index()
+        )
+
+        for _, row in summary_by_bot.iterrows():
+            bot_name = sanitize_mlflow_key(str(row["bot_name"]))
+
+            log_metrics(
+                mlflow=mlflow,
+                metrics={
+                    f"{bot_name}_avg_score": row["avg_score"],
+                    f"{bot_name}_total_score": row["total_score"],
+                    f"{bot_name}_avg_steps": row["avg_steps"],
+                    f"{bot_name}_avg_score_per_step": row["avg_score_per_step"],
+                    f"{bot_name}_avg_explore_reward": row["avg_explore_reward"],
+                    f"{bot_name}_avg_backtrack_ratio": row["avg_backtrack_ratio"],
+                    f"{bot_name}_avg_first_exit_step": row["avg_first_exit_step"],
+                    f"{bot_name}_avg_first_collection_step": row[
+                        "avg_first_collection_step"
+                    ],
+                    f"{bot_name}_exit_success_rate": row["exit_success_rate"],
+                },
+            )
+
+        log_artifacts(
+            mlflow=mlflow,
+            artifact_paths=[
+                TELEMETRY_OUTPUT_PATH,
+                RESULTS_OUTPUT_PATH,
+                REPORT_OUTPUT_PATH,
+            ],
+        )
+
 
 def main() -> None:
     results: list[EvaluationResult] = []
@@ -817,10 +917,12 @@ def main() -> None:
 
     results_df = write_results_csv(results)
     write_evaluation_report(results_df)
+    log_evaluation_to_mlflow(results_df)
 
     print(f"Evaluation results written to: {RESULTS_OUTPUT_PATH}")
     print(f"Evaluation report written to: {REPORT_OUTPUT_PATH}")
     print(f"Evaluation telemetry written to: {TELEMETRY_OUTPUT_PATH}")
+    print("MLflow tracking completed if ENABLE_MLFLOW=true.")
 
 
 if __name__ == "__main__":

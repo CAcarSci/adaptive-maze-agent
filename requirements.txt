@@ -1,5 +1,6 @@
 joblib
 matplotlib
+mlflow
 pandas
 pytest
 python-dotenv

@@ -17,6 +17,13 @@ from src.features.candidate_action_features import (
     FEATURE_COLUMNS,
     prepare_training_dataframe,
 )
+from src.tracking.mlflow_tracker import (
+    log_artifacts,
+    log_metrics,
+    log_params,
+    mlflow_run,
+    sanitize_mlflow_key,
+)
 
 
 INPUT_PATH = Path("experiments/action_logs.csv")
@@ -379,6 +386,75 @@ def save_training_report(metrics: dict[str, Any]) -> None:
     TRAINING_REPORT_OUTPUT_PATH.write_text("\n".join(lines), encoding="utf-8")
 
 
+def log_training_to_mlflow(metrics: dict[str, Any]) -> None:
+    with mlflow_run(
+        run_name="decision-tree-training",
+        tags={
+            "stage": "training",
+            "model_type": "decision_tree",
+        },
+    ) as mlflow:
+        if mlflow is None:
+            return
+
+        log_params(
+            mlflow=mlflow,
+            params={
+                "model_type": "DecisionTreeClassifier",
+                "max_depth": 4,
+                "min_samples_leaf": 2,
+                "class_weight": "balanced",
+                "training_bot_names": ", ".join(metrics["training_bot_names"]),
+                "observed_bot_names_before_filter": ", ".join(
+                    metrics["observed_bot_names_before_filter"]
+                ),
+                "target_type": "weak_supervision",
+                "target_description": (
+                    "Candidate action with highest transparent preference score"
+                ),
+                "root_split_feature": metrics.get("root_split_feature"),
+            },
+        )
+
+        log_metrics(
+            mlflow=mlflow,
+            metrics={
+                "telemetry_rows_before_filter": metrics[
+                    "telemetry_rows_before_filter"
+                ],
+                "telemetry_rows_after_filter": metrics[
+                    "telemetry_rows_after_filter"
+                ],
+                "training_rows": metrics["training_rows"],
+                "train_rows": metrics["train_rows"],
+                "test_rows": metrics["test_rows"],
+                "accuracy": metrics["accuracy"],
+            },
+        )
+
+        feature_importances = metrics["feature_importances"]
+
+        for _, row in feature_importances.iterrows():
+            feature_name = sanitize_mlflow_key(str(row["feature"]))
+            importance = float(row["importance"])
+
+            log_metrics(
+                mlflow=mlflow,
+                metrics={
+                    f"feature_importance_{feature_name}": importance,
+                },
+            )
+
+        log_artifacts(
+            mlflow=mlflow,
+            artifact_paths=[
+                MODEL_OUTPUT_PATH,
+                TREE_TEXT_OUTPUT_PATH,
+                TREE_PNG_OUTPUT_PATH,
+                TRAINING_REPORT_OUTPUT_PATH,
+            ],
+        )
+
 def main() -> None:
     raw_telemetry_df = load_telemetry(INPUT_PATH)
 
@@ -406,6 +482,7 @@ def main() -> None:
     save_tree_text(model)
     save_tree_png(model)
     save_training_report(metrics)
+    log_training_to_mlflow(metrics)
 
     print(f"Telemetry rows before filter: {metrics['telemetry_rows_before_filter']}")
     print(f"Telemetry rows after filter: {metrics['telemetry_rows_after_filter']}")
@@ -416,6 +493,7 @@ def main() -> None:
     print(f"Tree text written to: {TREE_TEXT_OUTPUT_PATH}")
     print(f"Tree graph written to: {TREE_PNG_OUTPUT_PATH}")
     print(f"Training report written to: {TRAINING_REPORT_OUTPUT_PATH}")
+    print("MLflow tracking completed if ENABLE_MLFLOW=true.")
 
 
 if __name__ == "__main__":
