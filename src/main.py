@@ -105,6 +105,7 @@ Generated files:
   - reports/decision_tree_training_report.md
   - reports/evaluation_results.csv
   - reports/evaluation_report.md
+  - reports/evaluation_ai_summary.md
 
 Notes:
   - Decision Tree telemetry is excluded from training inside the training script.
@@ -682,6 +683,7 @@ def show_report_paths() -> None:
     print("  - reports/decision_tree_policy.png")
     print("  - reports/evaluation_results.csv")
     print("  - reports/evaluation_report.md")
+    print("  - reports/evaluation_ai_summary.md")
 
 
 def print_interactive_menu(player_name: str) -> None:

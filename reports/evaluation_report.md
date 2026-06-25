@@ -113,6 +113,12 @@ This table shows whether a policy finds or secures reward earlier during explora
 | unseen       | Reverse          | decision_tree |                 236 |             59 |            4     |                       8.138 |                       0 |             0.492 |                30 |                      22 |                         100 |                         212 |                         236 | True         |
 | unseen       | Reverse          | reward_aware  |                 236 |             59 |            4     |                       8.138 |                       0 |             0.492 |                30 |                      12 |                         100 |                         194 |                         236 | True         |
 
+## AI Evaluation Summary
+
+The main result of the maze bot evaluation is that both baseline_dfs and decision_tree policies performed similarly in terms of average final score, with decision_tree slightly outperforming baseline_dfs. However, reward_aware policy showed a significant improvement in average final score compared to baseline_dfs and decision_tree.
+
+The evaluation results also show that reward_aware policy performed well across all maze groups, including seen and unseen mazes. This suggests that the policy is effective at learning from both types of mazes. The main limitation of the evaluation is that it only tested a limited number of mazes (27) and did not evaluate the policies on more complex or challenging mazes.
+
 ## Report Scope
 
 This report is generated deterministically from evaluation results.

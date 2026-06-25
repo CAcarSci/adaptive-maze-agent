@@ -17,6 +17,10 @@ from src.tracking.mlflow_tracker import (
     mlflow_run,
     sanitize_mlflow_key,
 )
+from src.evaluation.ai_report_evaluator import (
+    AI_SUMMARY_OUTPUT_PATH,
+    generate_local_ai_evaluation_summary,
+)
 
 
 @dataclass(frozen=True)
@@ -880,6 +884,7 @@ def log_evaluation_to_mlflow(results_df: pd.DataFrame) -> None:
                 TELEMETRY_OUTPUT_PATH,
                 RESULTS_OUTPUT_PATH,
                 REPORT_OUTPUT_PATH,
+                AI_SUMMARY_OUTPUT_PATH,
             ],
         )
 
@@ -917,11 +922,23 @@ def main() -> None:
 
     results_df = write_results_csv(results)
     write_evaluation_report(results_df)
+
+    generate_local_ai_evaluation_summary(
+        results_df=results_df,
+        report_path=REPORT_OUTPUT_PATH,
+    )
+
     log_evaluation_to_mlflow(results_df)
 
     print(f"Evaluation results written to: {RESULTS_OUTPUT_PATH}")
     print(f"Evaluation report written to: {REPORT_OUTPUT_PATH}")
     print(f"Evaluation telemetry written to: {TELEMETRY_OUTPUT_PATH}")
+
+    if AI_SUMMARY_OUTPUT_PATH.exists():
+        print(f"AI evaluation summary written to: {AI_SUMMARY_OUTPUT_PATH}")
+    else:
+        print("AI evaluation summary was not generated.")
+
     print("MLflow tracking completed if ENABLE_MLFLOW=true.")
 
 
