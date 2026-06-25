@@ -9,12 +9,854 @@ The goal of this project is to build a bot that can navigate mazes, collect rewa
 3. implement smarter navigation policies
 4. evaluate all policies with consistent metrics
 
-The project also includes optional lightweight MLflow tracking for local training and evaluation metadata.
+The project also includes lightweight local MLflow tracking for training and evaluation metadata, and a local Llama-based evaluation summary.
 
 The application can be used in two ways:
 
 - interactive mode for a guided demo flow
 - CLI mode for reproducible commands and automation
+
+---
+
+## Architecture
+
+The current implementation follows a lightweight layered architecture. The main idea is to separate application flow, domain logic, policy decisions, feature engineering, infrastructure, analysis, training, evaluation, AI summarization, tracking and tests.
+
+![High-Level Architecture](architecture_diagrams/high-level-architecture.drawio.png)
+
+---
+
+## Layer Overview
+
+### Application Layer
+
+The application layer is responsible for orchestration.
+
+- `main.py` provides both interactive mode and CLI commands.
+- `BaselineMazeBot` controls the shared maze-solving flow.
+- `SmartMazeBot` reuses the same flow and injects `RewardAwarePolicy`.
+- `DecisionTreeMazeBot` reuses the same flow and injects `DecisionTreePolicy`.
+
+The application entry point can:
+
+- show a guided menu
+- ask for a player name when missing
+- register or switch player
+- list available mazes
+- play a selected maze with a selected bot
+- collect training telemetry
+- analyze telemetry
+- train the Decision Tree
+- evaluate all policies
+- generate the AI evaluation summary
+- run the full pipeline
+
+---
+
+### Domain and Policy Layer
+
+The domain and policy layer contains maze-related concepts and navigation decision logic.
+
+- `models.py` defines:
+  - `MazeState`
+  - `MoveAction`
+- `NavigationPolicy` defines the contract for decision policies.
+- `BaselineDfsPolicy` preserves the deterministic baseline behavior.
+- `RewardAwarePolicy` implements the explainable heuristic strategy.
+- `DecisionTreePolicy` implements the trained ML-based strategy.
+
+---
+
+### Feature and Training Layer
+
+The feature and training layer converts telemetry into model-ready data.
+
+- `candidate_action_features.py` defines the shared feature schema used during training and inference.
+- `train_decision_tree.py` trains a Decision Tree classifier from telemetry.
+
+The training script writes:
+
+```text
+models/decision_tree_policy.joblib
+reports/decision_tree_policy.txt
+reports/decision_tree_policy.png
+reports/decision_tree_training_report.md
+```
+
+The training report includes:
+
+- telemetry rows before and after filtering
+- training policies used
+- train/test split size
+- accuracy
+- confusion matrix
+- classification report
+- feature importances
+- data-driven findings
+
+The Decision Tree model file is treated as a generated artifact and is not normally committed. The reports and graph can be committed because they make model behavior reviewable.
+
+---
+
+### Infrastructure Layer
+
+The infrastructure layer handles external interactions and persistence.
+
+- `config.py` loads environment variables and constructs the authorization header.
+- `MazeClient` handles communication with the HTI Maze API:
+  - player registration
+  - player reset
+  - maze listing
+  - maze entry
+  - movement
+  - score collection
+  - maze exit
+- `TelemetryLogger` writes structured runtime decision data to:
+  - `experiments/action_logs.csv`
+
+This separation keeps HTTP details and file I/O out of the navigation logic.
+
+---
+
+### Analysis Layer
+
+The analysis layer is responsible for understanding bot behavior.
+
+- `analyze_telemetry.py` reads telemetry from:
+
+```text
+experiments/action_logs.csv
+```
+
+- it generates:
+
+```text
+reports/telemetry_analysis.md
+```
+
+This report helps identify useful signals and compare behavior between policy types.
+
+---
+
+### Evaluation Layer
+
+The evaluation layer compares all implemented policies on the same maze set.
+
+- `evaluate_bots.py` evaluates:
+  - `baseline_dfs`
+  - `reward_aware`
+  - `decision_tree`
+
+It writes:
+
+```text
+experiments/evaluation_action_logs.csv
+reports/evaluation_results.csv
+reports/evaluation_report.md
+```
+
+The evaluation report is generated deterministically from metrics.
+
+---
+
+### AI Summary Layer
+
+The AI summary layer adds a readable qualitative interpretation on top of the deterministic evaluation metrics.
+
+- `ai_report_evaluator.py` reads the evaluation results.
+- It builds a compact policy summary.
+- It checks whether the configured local Llama model exists.
+- If needed, it pulls the model through Ollama.
+- It asks the local model to generate exactly two short paragraphs.
+- It writes the summary to:
+
+```text
+reports/evaluation_ai_summary.md
+```
+
+- It also appends the summary to:
+
+```text
+reports/evaluation_report.md
+```
+
+The measured metrics remain the source of truth.
+
+---
+
+### Tracking Layer
+
+The tracking layer provides lightweight local MLflow tracking.
+
+- `mlflow_tracker.py` wraps MLflow usage so training and evaluation can log metadata, metrics and artifacts without coupling the rest of the application to MLflow.
+- MLflow can be disabled through `.env`:
+
+```env
+ENABLE_MLFLOW=false
+```
+
+Local MLflow tracking uses a SQLite backend:
+
+```env
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+```
+
+Local MLflow output can include:
+
+```text
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns/
+mlartifacts/
+```
+
+These generated files and directories are ignored by Git.
+
+---
+
+### Quality Layer
+
+The quality layer contains unit tests.
+
+Current test coverage includes:
+
+- configuration and authorization header construction
+- API response model parsing
+- direction ordering and opposite-direction mapping
+- telemetry CSV logging
+- baseline policy behavior
+- reward-aware policy behavior
+- Decision Tree policy behavior
+- candidate-action feature preparation
+- Decision Tree training telemetry filtering
+- Decision Tree report helper behavior
+- evaluation checkpoint metrics
+- evaluation report generation
+- data-driven evaluation findings
+- local Llama summary helper behavior
+- MLflow tracking helper behavior
+
+Run tests with:
+
+```bash
+pytest -v
+```
+
+---
+
+## Setup
+
+Create a conda environment:
+
+```bash
+conda create -n adaptive-maze-agent python=3.11 -y
+conda activate adaptive-maze-agent
+```
+
+Install Python dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+This installs the Python dependencies used by the bot, analysis, training, evaluation and MLflow tracking.
+
+Ollama is not installed through `requirements.txt`. Ollama is a local runtime service and CLI used to run the local Llama model.
+
+---
+
+## Install Ollama CLI
+
+The local Llama summary uses Ollama. Install Ollama for your operating system before running evaluation.
+
+### Windows
+
+Open PowerShell and run:
+
+```powershell
+irm https://ollama.com/install.ps1 | iex
+```
+
+Verify installation:
+
+```powershell
+ollama --version
+```
+
+Start and verify the Ollama service:
+
+```powershell
+ollama serve
+```
+
+### macOS
+
+Download and install Ollama for macOS from the official Ollama download page, then open the Ollama application once. The app verifies that the `ollama` CLI is available in your PATH and can create the CLI link when needed.
+
+Alternatively, install Ollama through Homebrew:
+
+```bash
+brew install ollama
+```
+
+Verify installation:
+
+```bash
+ollama --version
+```
+
+Start and verify the Ollama service:
+
+```bash
+ollama serve
+```
+
+### Linux
+
+Run:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+Verify installation:
+
+```bash
+ollama --version
+```
+
+Start and verify the Ollama service:
+
+```bash
+ollama serve
+```
+
+### Model Pulling
+
+The app can pull the configured model automatically during evaluation when:
+
+```env
+LLAMA_AUTO_PULL_MODEL=true
+```
+
+You can also pull the model manually:
+
+```bash
+ollama pull llama3.2:1b
+```
+
+---
+
+## Environment Configuration
+
+Create a local `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the API token in `.env`:
+
+```env
+# Maze API configuration
+MAZE_BASE_URL=https://maze.kluster.htiprojects.nl
+MAZE_API_TOKEN=<your-api-token>
+
+# Player configuration
+# Optional for interactive mode. If omitted or left empty, the app will ask for a player name.
+PLAYER_NAME=
+
+# Default single-run configuration
+DEFAULT_MAZE_NAME=Easy deal
+
+# Supported values: baseline, smart, decision_tree
+BOT_TYPE=baseline
+
+# Set to true during local development if the player can remain inside a maze
+# after an interrupted run.
+RESET_PLAYER_ON_START=false
+
+# Lightweight MLflow tracking
+ENABLE_MLFLOW=true
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+MLFLOW_EXPERIMENT_NAME=adaptive-maze-agent
+
+# Local Llama evaluation summary
+ENABLE_LLAMA_EVALUATION=true
+LLAMA_AUTO_PULL_MODEL=true
+LLAMA_EVALUATION_BASE_URL=http://localhost:11434/v1
+LLAMA_EVALUATION_API_KEY=ollama
+LLAMA_EVALUATION_MODEL=llama3.2:1b
+LLAMA_EVALUATION_TIMEOUT_SECONDS=60
+LLAMA_MODEL_PULL_TIMEOUT_SECONDS=600
+```
+
+The code automatically sends the token using the required authorization header format:
+
+```text
+Authorization: HTI Thanks You <token>
+```
+
+---
+
+## Running the Application
+
+### Interactive Mode
+
+Run the application without arguments:
+
+```bash
+python -m src.main
+```
+
+Interactive mode shows:
+
+- current known player name
+- register or switch player
+- available mazes
+- play new game
+- collect training telemetry
+- analyze telemetry
+- train Decision Tree
+- evaluate all policies
+- run the full pipeline
+- report paths
+
+Example menu:
+
+```text
+Main menu
+
+Current player: Adaptive Maze Player
+
+1. Play new game
+2. Run entire pipeline with default settings
+3. Register or switch player
+4. List available mazes
+5. Collect training telemetry
+6. Analyze telemetry
+7. Train Decision Tree
+8. Evaluate all policies
+9. Run full pipeline with custom training mazes
+10. Show guide
+11. Show generated report paths
+0. Exit
+```
+
+---
+
+### CLI Mode
+
+List available mazes:
+
+```bash
+python -m src.main list-mazes
+```
+
+Run one bot on one maze:
+
+```bash
+python -m src.main run-bot \
+  --bot-type baseline \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+Collect training telemetry from baseline and reward-aware bots:
+
+```bash
+python -m src.main collect-training-data --fresh-telemetry
+```
+
+Analyze telemetry:
+
+```bash
+python -m src.main analyze-telemetry
+```
+
+Train the Decision Tree policy:
+
+```bash
+python -m src.main train-decision-tree
+```
+
+Evaluate all policies and generate the local Llama summary:
+
+```bash
+python -m src.main evaluate
+```
+
+Run the full default pipeline:
+
+```bash
+python -m src.main pipeline --fresh-telemetry
+```
+
+---
+
+## Recommended Workflow
+
+For a clean end-to-end run:
+
+```bash
+python -m src.main pipeline --fresh-telemetry
+```
+
+This performs:
+
+1. collect training telemetry from `baseline` and `smart`
+2. generate telemetry analysis
+3. train the Decision Tree policy
+4. evaluate all policies
+5. generate Markdown reports
+6. generate the AI evaluation summary
+7. log training and evaluation metadata to MLflow when enabled
+
+The default training mazes are:
+
+```text
+Example Maze
+Gradius Pathways
+Hello Maze
+```
+
+The evaluation workflow includes seen and unseen mazes.
+
+---
+
+## Running Individual Bots
+
+### Baseline Bot
+
+```bash
+python -m src.main run-bot \
+  --bot-type baseline \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+The telemetry should contain:
+
+```text
+bot_name: baseline_dfs
+```
+
+---
+
+### Reward-Aware Smart Bot
+
+```bash
+python -m src.main run-bot \
+  --bot-type smart \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+The telemetry should contain:
+
+```text
+bot_name: reward_aware
+```
+
+---
+
+### Decision Tree Bot
+
+Train the model first:
+
+```bash
+python -m src.main train-decision-tree
+```
+
+Then run:
+
+```bash
+python -m src.main run-bot \
+  --bot-type decision_tree \
+  --maze-name "Example Maze" \
+  --reset-player
+```
+
+The telemetry should contain:
+
+```text
+bot_name: decision_tree
+```
+
+---
+
+## Training the Decision Tree Policy
+
+Before training, collect telemetry from baseline and reward-aware policies:
+
+```bash
+python -m src.main collect-training-data --fresh-telemetry
+```
+
+Then train:
+
+```bash
+python -m src.main train-decision-tree
+```
+
+This generates:
+
+```text
+models/decision_tree_policy.joblib
+reports/decision_tree_policy.txt
+reports/decision_tree_policy.png
+reports/decision_tree_training_report.md
+```
+
+Open the Decision Tree graph locally:
+
+```bash
+open reports/decision_tree_policy.png
+```
+
+The training script filters telemetry before training.
+
+Used for training:
+
+```text
+baseline_dfs
+reward_aware
+```
+
+Excluded from training:
+
+```text
+decision_tree
+```
+
+This prevents training the Decision Tree on its own generated behavior.
+
+When MLflow is enabled, training also logs:
+
+- model parameters
+- training row counts
+- train/test split size
+- accuracy
+- feature importances
+- generated training artifacts
+
+---
+
+## Running the Evaluation
+
+Run:
+
+```bash
+python -m src.main evaluate
+```
+
+This generates:
+
+```text
+experiments/evaluation_action_logs.csv
+reports/evaluation_results.csv
+reports/evaluation_report.md
+reports/evaluation_ai_summary.md
+```
+
+The evaluation report includes deterministic data-driven findings such as:
+
+- final score finding
+- best score per step
+- early reward progress leaders
+- first collection step leaders
+- first exit-capable tile step leaders
+- backtrack ratio leaders
+- exit success rate leaders
+
+The AI summary is appended as a separate section at the end of the report.
+
+When MLflow is enabled, evaluation also logs:
+
+- evaluated policies
+- evaluated mazes
+- average score by policy
+- score per step by policy
+- exit success rate
+- generated evaluation artifacts
+- AI evaluation summary artifact
+
+---
+
+## AI Evaluation Summary
+
+The AI summary is generated during evaluation.
+
+It reads only structured evaluation output and generates a two-paragraph summary for reviewers. The measured metrics remain the source of truth.
+
+Configuration:
+
+```env
+ENABLE_LLAMA_EVALUATION=true
+LLAMA_AUTO_PULL_MODEL=true
+LLAMA_EVALUATION_BASE_URL=http://localhost:11434/v1
+LLAMA_EVALUATION_API_KEY=ollama
+LLAMA_EVALUATION_MODEL=llama3.2:1b
+LLAMA_EVALUATION_TIMEOUT_SECONDS=60
+LLAMA_MODEL_PULL_TIMEOUT_SECONDS=600
+```
+
+Output:
+
+```text
+reports/evaluation_ai_summary.md
+```
+
+The same summary is appended to:
+
+```text
+reports/evaluation_report.md
+```
+
+Disable the Llama summary if needed:
+
+```env
+ENABLE_LLAMA_EVALUATION=false
+```
+
+---
+
+## Lightweight MLflow Tracking
+
+MLflow tracking is local by default.
+
+It is configured in `.env`:
+
+```env
+ENABLE_MLFLOW=true
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+MLFLOW_EXPERIMENT_NAME=adaptive-maze-agent
+```
+
+Disable tracking:
+
+```env
+ENABLE_MLFLOW=false
+```
+
+Run training and evaluation:
+
+```bash
+python -m src.main train-decision-tree
+python -m src.main evaluate
+```
+
+or run the full pipeline:
+
+```bash
+python -m src.main pipeline --fresh-telemetry
+```
+
+Start the local MLflow UI:
+
+```bash
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+Then open the local MLflow UI in the browser.
+
+MLflow is used only for lightweight local tracking. The Markdown reports remain the main reviewable output of the project.
+
+---
+
+## Generated Artifacts
+
+The project produces several generated artifacts.
+
+Runtime telemetry:
+
+```text
+experiments/action_logs.csv
+```
+
+Evaluation telemetry:
+
+```text
+experiments/evaluation_action_logs.csv
+```
+
+Telemetry analysis:
+
+```text
+reports/telemetry_analysis.md
+```
+
+Decision Tree model:
+
+```text
+models/decision_tree_policy.joblib
+```
+
+Decision Tree explanation artifacts:
+
+```text
+reports/decision_tree_policy.txt
+reports/decision_tree_policy.png
+reports/decision_tree_training_report.md
+```
+
+Evaluation artifacts:
+
+```text
+reports/evaluation_results.csv
+reports/evaluation_report.md
+reports/evaluation_ai_summary.md
+```
+
+MLflow local tracking database and artifacts:
+
+```text
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns/
+mlartifacts/
+```
+
+Runtime telemetry CSV files, local MLflow files and trained model files are generated artifacts and should not normally be committed.
+
+The Markdown reports, evaluation CSV and Decision Tree graph can be committed because they make the analysis, evaluation and model behavior reviewable.
+
+---
+
+## Unit Tests
+
+Run all tests:
+
+```bash
+pytest -v
+```
+
+Run specific test groups:
+
+```bash
+pytest -v tests/test_decision_tree_training.py
+pytest -v tests/test_evaluation_report.py
+pytest -v tests/test_ai_report_evaluator.py
+```
+
+The tests cover:
+
+- configuration loading
+- authorization header formatting
+- API response model parsing
+- telemetry logging
+- policy behavior
+- feature preparation
+- Decision Tree inference
+- training telemetry filtering
+- training report helpers
+- evaluation metrics
+- evaluation report generation
+- data-driven evaluation findings
+- local Llama summary helper behavior
+- MLflow tracking helper behavior
 
 ---
 
@@ -175,7 +1017,7 @@ Evaluation telemetry is written separately to:
 experiments/evaluation_action_logs.csv
 ```
 
-The evaluation report is generated deterministically from the evaluation results. It does not use generated natural-language interpretation. Instead, it calculates findings from the metrics.
+The evaluation report is generated deterministically from the evaluation results. It calculates findings from the metrics.
 
 The evaluation includes:
 
@@ -208,11 +1050,59 @@ python -m src.evaluation.evaluate_bots
 
 ---
 
-### Supplementary — Lightweight MLflow Tracking
+### AI Evaluation Summary
 
 Implemented.
 
-The project includes optional lightweight MLflow tracking.
+The evaluation workflow includes a local Llama-based report summarizer.
+
+The summarizer reads the structured evaluation results from:
+
+```text
+reports/evaluation_results.csv
+```
+
+and generates a short two-paragraph qualitative summary. The deterministic metrics remain the source of truth; the Llama summary is used only as a readable interpretation layer on top of the measured results.
+
+The generated summary is written to:
+
+```text
+reports/evaluation_ai_summary.md
+```
+
+and appended to:
+
+```text
+reports/evaluation_report.md
+```
+
+The project is configured to use a small local Llama model through Ollama:
+
+```env
+ENABLE_LLAMA_EVALUATION=true
+LLAMA_AUTO_PULL_MODEL=true
+LLAMA_EVALUATION_BASE_URL=http://localhost:11434/v1
+LLAMA_EVALUATION_API_KEY=ollama
+LLAMA_EVALUATION_MODEL=llama3.2:1b
+LLAMA_EVALUATION_TIMEOUT_SECONDS=60
+LLAMA_MODEL_PULL_TIMEOUT_SECONDS=600
+```
+
+When evaluation runs, the application checks whether the configured local Llama model is available. If the model is missing and `LLAMA_AUTO_PULL_MODEL=true`, the app pulls the model automatically with Ollama before generating the summary.
+
+Run evaluation with:
+
+```bash
+python -m src.main evaluate
+```
+
+---
+
+### Lightweight MLflow Tracking
+
+Implemented.
+
+The project includes lightweight local MLflow tracking.
 
 MLflow is used only to track training and evaluation metadata. It does not change the bot logic, does not replace the Markdown reports and does not introduce a deployment or model registry workflow.
 
@@ -234,6 +1124,7 @@ Tracked evaluation data includes:
 - score per step by policy
 - exit success rate
 - generated evaluation artifacts
+- AI evaluation summary artifact
 
 MLflow tracking is configured through `.env`:
 
@@ -251,7 +1142,7 @@ mlflow ui --backend-store-uri sqlite:///mlflow.db
 
 Then open the local MLflow UI in the browser.
 
-MLflow tracking is optional. If MLflow cannot be configured, the main training and evaluation pipeline continues and prints a warning instead of failing.
+If MLflow cannot be configured, the main training and evaluation pipeline continues and prints a warning instead of failing.
 
 Disable MLflow tracking with:
 
@@ -348,812 +1239,6 @@ decision_tree
 
 ---
 
-## Architecture
-
-The current implementation follows a lightweight layered architecture. The main idea is to separate application flow, domain logic, policy decisions, feature engineering, infrastructure, analysis, training, evaluation, tracking and tests.
-
-```mermaid
-flowchart TD
-    %% Application Layer
-    subgraph APP[Application Layer]
-        A[main.py<br/>Interactive CLI and pipeline]
-        B[BaselineMazeBot]
-        C[SmartMazeBot]
-        D[DecisionTreeMazeBot]
-    end
-
-    %% Domain and Policy Layer
-    subgraph DOMAIN[Domain and Policy Layer]
-        E[models.py<br/>MazeState / MoveAction]
-        F[NavigationPolicy]
-        G[BaselineDfsPolicy]
-        H[RewardAwarePolicy]
-        I[DecisionTreePolicy]
-    end
-
-    %% Feature and Training Layer
-    subgraph ML[Feature and Training Layer]
-        J[candidate_action_features.py]
-        K[train_decision_tree.py]
-        L[models/decision_tree_policy.joblib]
-        M[reports/decision_tree_policy.png]
-        N[reports/decision_tree_policy.txt]
-        O[reports/decision_tree_training_report.md]
-    end
-
-    %% Infrastructure Layer
-    subgraph INFRA[Infrastructure Layer]
-        P[config.py]
-        Q[MazeClient]
-        R[TelemetryLogger]
-        S[experiments/action_logs.csv]
-        T[HTI Maze API]
-    end
-
-    %% Analysis Layer
-    subgraph ANALYSIS[Analysis Layer]
-        U[analyze_telemetry.py]
-        V[reports/telemetry_analysis.md]
-    end
-
-    %% Evaluation Layer
-    subgraph EVAL[Evaluation Layer]
-        X[evaluate_bots.py]
-        Y[experiments/evaluation_action_logs.csv]
-        Z[reports/evaluation_results.csv]
-        AA[reports/evaluation_report.md]
-    end
-
-    %% Tracking Layer
-    subgraph TRACKING[Tracking Layer]
-        AB[mlflow_tracker.py]
-        AC[mlflow.db]
-        AD[local MLflow artifacts]
-    end
-
-    %% Quality Layer
-    subgraph TESTS[Quality Layer]
-        W[tests/]
-    end
-
-    A --> P
-    A --> Q
-    A --> B
-    A --> C
-    A --> D
-    A --> R
-    A --> U
-    A --> K
-    A --> X
-
-    B --> F
-    C --> F
-    D --> F
-
-    F --> G
-    F --> H
-    F --> I
-
-    B --> E
-    C --> E
-    D --> E
-
-    B --> Q
-    C --> Q
-    D --> Q
-
-    B --> R
-    C --> R
-    D --> R
-
-    I --> L
-    I --> J
-
-    K --> S
-    K --> J
-    K --> L
-    K --> M
-    K --> N
-    K --> O
-    K --> AB
-
-    Q --> T
-    R --> S
-
-    U --> S
-    U --> V
-
-    X --> B
-    X --> C
-    X --> D
-    X --> Y
-    X --> Z
-    X --> AA
-    X --> AB
-
-    AB --> AC
-    AB --> AD
-
-    W --> P
-    W --> E
-    W --> R
-    W --> G
-    W --> H
-    W --> I
-    W --> J
-    W --> K
-    W --> X
-    W --> AB
-```
-
----
-
-## Layer Overview
-
-### Application Layer
-
-The application layer is responsible for orchestration.
-
-- `main.py` provides both interactive mode and CLI commands.
-- `BaselineMazeBot` controls the shared maze-solving flow.
-- `SmartMazeBot` reuses the same flow and injects `RewardAwarePolicy`.
-- `DecisionTreeMazeBot` reuses the same flow and injects `DecisionTreePolicy`.
-
-The application entry point can:
-
-- show a guided menu
-- ask for a player name when missing
-- register or switch player
-- list available mazes
-- play a selected maze with a selected bot
-- collect training telemetry
-- analyze telemetry
-- train the Decision Tree
-- evaluate all policies
-- run the full pipeline
-
----
-
-### Domain and Policy Layer
-
-The domain and policy layer contains maze-related concepts and navigation decision logic.
-
-- `models.py` defines:
-  - `MazeState`
-  - `MoveAction`
-- `NavigationPolicy` defines the contract for decision policies.
-- `BaselineDfsPolicy` preserves the deterministic baseline behavior.
-- `RewardAwarePolicy` implements the explainable heuristic strategy.
-- `DecisionTreePolicy` implements the trained ML-based strategy.
-
----
-
-### Feature and Training Layer
-
-The feature and training layer converts telemetry into model-ready data.
-
-- `candidate_action_features.py` defines the shared feature schema used during training and inference.
-- `train_decision_tree.py` trains a Decision Tree classifier from telemetry.
-
-The training script writes:
-
-```text
-models/decision_tree_policy.joblib
-reports/decision_tree_policy.txt
-reports/decision_tree_policy.png
-reports/decision_tree_training_report.md
-```
-
-The training report includes:
-
-- telemetry rows before and after filtering
-- training policies used
-- train/test split size
-- accuracy
-- confusion matrix
-- classification report
-- feature importances
-- data-driven findings
-
-The Decision Tree model file is treated as a generated artifact and is not normally committed. The reports and graph can be committed because they make model behavior reviewable.
-
----
-
-### Infrastructure Layer
-
-The infrastructure layer handles external interactions and persistence.
-
-- `config.py` loads environment variables and constructs the authorization header.
-- `MazeClient` handles communication with the HTI Maze API:
-  - player registration
-  - player reset
-  - maze listing
-  - maze entry
-  - movement
-  - score collection
-  - maze exit
-- `TelemetryLogger` writes structured runtime decision data to:
-  - `experiments/action_logs.csv`
-
-This separation keeps HTTP details and file I/O out of the navigation logic.
-
----
-
-### Analysis Layer
-
-The analysis layer is responsible for understanding bot behavior.
-
-- `analyze_telemetry.py` reads telemetry from:
-
-```text
-experiments/action_logs.csv
-```
-
-- it generates:
-
-```text
-reports/telemetry_analysis.md
-```
-
-This report helps identify useful signals and compare behavior between policy types.
-
----
-
-### Evaluation Layer
-
-The evaluation layer compares all implemented policies on the same maze set.
-
-- `evaluate_bots.py` evaluates:
-  - `baseline_dfs`
-  - `reward_aware`
-  - `decision_tree`
-
-It writes:
-
-```text
-experiments/evaluation_action_logs.csv
-reports/evaluation_results.csv
-reports/evaluation_report.md
-```
-
-The evaluation report is generated deterministically from metrics. It does not use manually written result-specific conclusions.
-
----
-
-### Tracking Layer
-
-The tracking layer provides optional lightweight MLflow tracking.
-
-- `mlflow_tracker.py` wraps MLflow usage so training and evaluation can log metadata, metrics and artifacts without coupling the rest of the application to MLflow.
-- MLflow can be disabled through `.env`:
-
-```env
-ENABLE_MLFLOW=false
-```
-
-Local MLflow tracking uses a SQLite backend:
-
-```env
-MLFLOW_TRACKING_URI=sqlite:///mlflow.db
-```
-
-Local MLflow output can include:
-
-```text
-mlflow.db
-mlflow.db-shm
-mlflow.db-wal
-mlruns/
-mlartifacts/
-```
-
-These generated files and directories are ignored by Git.
-
----
-
-### Quality Layer
-
-The quality layer contains unit tests.
-
-Current test coverage includes:
-
-- configuration and authorization header construction
-- API response model parsing
-- direction ordering and opposite-direction mapping
-- telemetry CSV logging
-- baseline policy behavior
-- reward-aware policy behavior
-- Decision Tree policy behavior
-- candidate-action feature preparation
-- Decision Tree training telemetry filtering
-- Decision Tree report helper behavior
-- evaluation checkpoint metrics
-- evaluation report generation
-- data-driven evaluation findings
-- MLflow tracking helper behavior
-
-Run tests with:
-
-```bash
-pytest -v
-```
-
----
-
-## Setup
-
-Create a conda environment:
-
-```bash
-conda create -n adaptive-maze-agent python=3.11 -y
-conda activate adaptive-maze-agent
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-This also installs MLflow, which is used only for optional local experiment tracking.
-
-Create a local `.env` file:
-
-```bash
-cp .env.example .env
-```
-
-Fill in the API token in `.env`:
-
-```env
-# Maze API configuration
-MAZE_BASE_URL=https://maze.kluster.htiprojects.nl
-MAZE_API_TOKEN=<your-api-token>
-
-# Player configuration
-# Optional for interactive mode. If omitted or left empty, the app will ask for a player name.
-PLAYER_NAME=
-
-# Default single-run configuration
-DEFAULT_MAZE_NAME=Easy deal
-
-# Supported values: baseline, smart, decision_tree
-BOT_TYPE=baseline
-
-# Set to true during local development if the player can remain inside a maze
-# after an interrupted run.
-RESET_PLAYER_ON_START=false
-
-# Lightweight MLflow tracking, optional and local by default. Set to true to enable MLflow tracking.
-ENABLE_MLFLOW=true
-MLFLOW_TRACKING_URI=sqlite:///mlflow.db
-MLFLOW_EXPERIMENT_NAME=adaptive-maze-agent
-```
-
-The code automatically sends the token using the required authorization header format:
-
-```text
-Authorization: HTI Thanks You <token>
-```
-
----
-
-## Running the Application
-
-### Interactive Mode
-
-Run the application without arguments:
-
-```bash
-python -m src.main
-```
-
-Interactive mode shows:
-
-- current known player name
-- register or switch player
-- available mazes
-- play new game
-- collect training telemetry
-- analyze telemetry
-- train Decision Tree
-- evaluate all policies
-- run the full pipeline
-- report paths
-
-Example menu:
-
-```text
-Main menu
-
-Current player: Adaptive Maze Player
-
-1. Play new game
-2. Run entire pipeline with default settings
-3. Register or switch player
-4. List available mazes
-5. Collect training telemetry
-6. Analyze telemetry
-7. Train Decision Tree
-8. Evaluate all policies
-9. Run full pipeline with custom training mazes
-10. Show guide
-11. Show generated report paths
-0. Exit
-```
-
----
-
-### CLI Mode
-
-List available mazes:
-
-```bash
-python -m src.main list-mazes
-```
-
-Run one bot on one maze:
-
-```bash
-python -m src.main run-bot \
-  --bot-type baseline \
-  --maze-name "Example Maze" \
-  --reset-player
-```
-
-Collect training telemetry from baseline and reward-aware bots:
-
-```bash
-python -m src.main collect-training-data --fresh-telemetry
-```
-
-Analyze telemetry:
-
-```bash
-python -m src.main analyze-telemetry
-```
-
-Train the Decision Tree policy:
-
-```bash
-python -m src.main train-decision-tree
-```
-
-Evaluate all policies:
-
-```bash
-python -m src.main evaluate
-```
-
-Run the full default pipeline:
-
-```bash
-python -m src.main pipeline --fresh-telemetry
-```
-
----
-
-## Recommended Workflow
-
-For a clean end-to-end run:
-
-```bash
-python -m src.main pipeline --fresh-telemetry
-```
-
-This performs:
-
-1. collect training telemetry from `baseline` and `smart`
-2. generate telemetry analysis
-3. train the Decision Tree policy
-4. evaluate all policies
-5. generate Markdown reports
-6. log training and evaluation metadata to MLflow when enabled
-
-The default training mazes are:
-
-```text
-Example Maze
-Gradius Pathways
-Hello Maze
-```
-
-The evaluation workflow includes seen and unseen mazes.
-
----
-
-## Running Individual Bots
-
-### Baseline Bot
-
-```bash
-python -m src.main run-bot \
-  --bot-type baseline \
-  --maze-name "Example Maze" \
-  --reset-player
-```
-
-The telemetry should contain:
-
-```text
-bot_name: baseline_dfs
-```
-
----
-
-### Reward-Aware Smart Bot
-
-```bash
-python -m src.main run-bot \
-  --bot-type smart \
-  --maze-name "Example Maze" \
-  --reset-player
-```
-
-The telemetry should contain:
-
-```text
-bot_name: reward_aware
-```
-
----
-
-### Decision Tree Bot
-
-Train the model first:
-
-```bash
-python -m src.main train-decision-tree
-```
-
-Then run:
-
-```bash
-python -m src.main run-bot \
-  --bot-type decision_tree \
-  --maze-name "Example Maze" \
-  --reset-player
-```
-
-The telemetry should contain:
-
-```text
-bot_name: decision_tree
-```
-
----
-
-## Training the Decision Tree Policy
-
-Before training, collect telemetry from baseline and reward-aware policies:
-
-```bash
-python -m src.main collect-training-data --fresh-telemetry
-```
-
-Then train:
-
-```bash
-python -m src.main train-decision-tree
-```
-
-This generates:
-
-```text
-models/decision_tree_policy.joblib
-reports/decision_tree_policy.txt
-reports/decision_tree_policy.png
-reports/decision_tree_training_report.md
-```
-
-Open the Decision Tree graph locally:
-
-```bash
-open reports/decision_tree_policy.png
-```
-
-The training script filters telemetry before training.
-
-Used for training:
-
-```text
-baseline_dfs
-reward_aware
-```
-
-Excluded from training:
-
-```text
-decision_tree
-```
-
-This prevents training the Decision Tree on its own generated behavior.
-
-When MLflow is enabled, training also logs:
-
-- model parameters
-- training row counts
-- train/test split size
-- accuracy
-- feature importances
-- generated training artifacts
-
----
-
-## Running the Evaluation
-
-Run:
-
-```bash
-python -m src.main evaluate
-```
-
-This generates:
-
-```text
-experiments/evaluation_action_logs.csv
-reports/evaluation_results.csv
-reports/evaluation_report.md
-```
-
-The evaluation report includes deterministic data-driven findings such as:
-
-- final score finding
-- best score per step
-- early reward progress leaders
-- first collection step leaders
-- first exit-capable tile step leaders
-- backtrack ratio leaders
-- exit success rate leaders
-
-The report does not contain manually hardcoded run-specific conclusions.
-
-When MLflow is enabled, evaluation also logs:
-
-- evaluated policies
-- evaluated mazes
-- average score by policy
-- score per step by policy
-- exit success rate
-- generated evaluation artifacts
-
----
-
-## Lightweight MLflow Tracking
-
-MLflow tracking is optional and local by default.
-
-It is configured in `.env`:
-
-```env
-ENABLE_MLFLOW=true
-MLFLOW_TRACKING_URI=sqlite:///mlflow.db
-MLFLOW_EXPERIMENT_NAME=adaptive-maze-agent
-```
-
-Disable tracking:
-
-```env
-ENABLE_MLFLOW=false
-```
-
-Run training and evaluation:
-
-```bash
-python -m src.main train-decision-tree
-python -m src.main evaluate
-```
-
-or run the full pipeline:
-
-```bash
-python -m src.main pipeline --fresh-telemetry
-```
-
-Start the local MLflow UI:
-
-```bash
-mlflow ui --backend-store-uri sqlite:///mlflow.db
-```
-
-Then open the local MLflow UI in the browser.
-
-MLflow is used only for lightweight local tracking. The Markdown reports remain the main reviewable output of the project.
-
----
-
-## Generated Artifacts
-
-The project produces several generated artifacts.
-
-Runtime telemetry:
-
-```text
-experiments/action_logs.csv
-```
-
-Evaluation telemetry:
-
-```text
-experiments/evaluation_action_logs.csv
-```
-
-Telemetry analysis:
-
-```text
-reports/telemetry_analysis.md
-```
-
-Decision Tree model:
-
-```text
-models/decision_tree_policy.joblib
-```
-
-Decision Tree explanation artifacts:
-
-```text
-reports/decision_tree_policy.txt
-reports/decision_tree_policy.png
-reports/decision_tree_training_report.md
-```
-
-Evaluation artifacts:
-
-```text
-reports/evaluation_results.csv
-reports/evaluation_report.md
-```
-
-MLflow local tracking database and artifacts:
-
-```text
-mlflow.db
-mlflow.db-shm
-mlflow.db-wal
-mlruns/
-mlartifacts/
-```
-
-Runtime telemetry CSV files, local MLflow files and trained model files are generated artifacts and should not normally be committed.
-
-The Markdown reports and Decision Tree graph can be committed because they make the analysis, evaluation and model behavior reviewable.
-
----
-
-## Unit Tests
-
-Run all tests:
-
-```bash
-pytest -v
-```
-
-Run specific test groups:
-
-```bash
-pytest -v tests/test_decision_tree_training.py
-pytest -v tests/test_evaluation_report.py
-```
-
-The tests cover:
-
-- configuration loading
-- authorization header formatting
-- API response model parsing
-- telemetry logging
-- policy behavior
-- feature preparation
-- Decision Tree inference
-- training telemetry filtering
-- training report helpers
-- evaluation metrics
-- evaluation report generation
-- data-driven evaluation findings
-- MLflow tracking helper behavior
-
----
-
 ## Current Limitations
 
 The current solution is intentionally lightweight.
@@ -1167,8 +1252,40 @@ Known limitations:
 - The project does not precisely classify destination tiles as dead ends, corridors or junctions.
 - The Decision Tree target is weakly supervised from a transparent preference score, not from human labels or final maze outcomes.
 - The project does not train a reinforcement learning policy.
-- The project does not use LLMs or other generative AI models for interpretation or evaluation. The evaluation report is generated deterministically from metrics.
+- The local Llama summary is a reporting aid and not part of the scoring logic.
 - The project does not use a large-scale ML model. The Decision Tree is intentionally lightweight and explainable.
 - MLflow tracking is intentionally local and lightweight. It is not used as a deployment, model registry or production MLOps system.
 
-These limitations are deliberate trade-offs for a 4–8å hour technical challenge. The implementation focuses on correctness, explainability, telemetry, model simplicity, reproducible evaluation and lightweight experiment tracking.
+These limitations are deliberate trade-offs for a 4–8 hour technical challenge. The implementation focuses on correctness, explainability, telemetry, model simplicity, reproducible evaluation, local LLM summarization and lightweight experiment tracking.
+
+---
+
+## Possible Future Improvements
+
+Future improvements could include:
+
+- reconstructing a graph-level map of each maze
+- deriving exact tile-level features such as dead end, corridor and junction
+- adding budgeted evaluation where the bot must maximize reward within a fixed step limit
+- training from final run outcomes instead of weak preference labels
+- comparing policy behavior on larger and more branching mazes
+- adding more robust experiment configuration files
+- improving the local Llama prompt with richer evaluation context
+- adding a local Llama availability preflight command
+
+---
+
+## Design Philosophy
+
+The implementation follows a lightweight AI engineering approach:
+
+1. build a working baseline
+2. make behavior measurable
+3. analyze collected telemetry
+4. introduce an explainable smart policy
+5. train a lightweight ML policy
+6. evaluate all policies with consistent metrics
+7. generate a local Llama summary for reviewer readability
+8. track training and evaluation metadata locally
+
+The focus is not only on solving the maze, but also on explaining the reasoning, trade-offs and metrics behind the chosen approach.
